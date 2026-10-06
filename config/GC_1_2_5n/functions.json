@@ -402,13 +402,13 @@
     "source": "src/runtime/delop.cpp"
   },
   {
-    "name": "initialize_critical_sections",
+    "name": "__init_critical_regions",
     "address": "0x00403d30",
     "size": 35,
     "source": "src/msl/critical_regions_win32.c"
   },
   {
-    "name": "delete_critical_sections",
+    "name": "__kill_critical_regions",
     "address": "0x00403d60",
     "size": 35,
     "source": "src/msl/critical_regions_win32.c"

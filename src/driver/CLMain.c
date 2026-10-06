@@ -597,7 +597,7 @@ unsigned int CLMain_InitializeAndParseCommandLine(void)
 {
     unsigned int result;
 
-    result = fn_0041b370(driver_jmp_buf);
+    result = _Setjmp(driver_jmp_buf);
     if (!result) {
         if (!create_cmdline_data_blocks())
             CLErrors_FatalError("Could not initialize preferences");

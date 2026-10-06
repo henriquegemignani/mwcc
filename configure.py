@@ -70,6 +70,9 @@ def main():
         "rule mwcc_pro4",
         "  command = " + ENVIRONMENT + "$wibo $compiler_command $cflags",
         "  description = MWCC $in",
+        "rule link",
+        "  command = $python tools/link.py $version $out",
+        "  description = LINK $out",
         "rule extract",
         "  command = $python tools/compare.py extract $version",
         "  description = EXTRACT $version",
@@ -91,7 +94,7 @@ def main():
         " build/compilers/GC/1.3/mwcceppc.exe: download",
         "  tool = compilers",
     ]
-    out += ["build lib/ok: download", "  tool = lib"]
+    out += ["build lib/ok: download", "  tool = lib", "build build/mwld/ok: download", "  tool = mwld"]
     # (a version built with other compilers maps the sources' to its own: config/<version>/config.json "compilers")
     host = lambda settings: config.get("compilers", {}).get(settings["compiler"], settings["compiler"])
     for compiler in sorted({host(s) for s in sources.values()}):
@@ -118,6 +121,8 @@ def main():
         f"build build/{version}/target/ok: extract | {config['original']} {configs} tools/compare.py tools/pe.py",
         f"build build/{version}/ok objdiff.json: compare | build/{version}/target/ok {' '.join(objects)}",
         f"build build/{version}/report.json: report | build/{version}/ok build/tools/objdiff-cli",
+        # (the compiler linked from the objects: ninja build/<version>/mwcceppc.exe)
+        f"build build/{version}/mwcceppc.exe: link {' '.join(objects)} | build/mwld/ok tools/link.py tools/prepare_objects.py",
         f"build all_source: phony {' '.join(objects)}",
         f"build progress: phony build/{version}/report.json",
         "build build.ninja: configure | configure.py config/sources.json",

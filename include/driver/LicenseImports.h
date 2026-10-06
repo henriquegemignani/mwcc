@@ -11,9 +11,9 @@ extern __declspec(naked) int fn_004270ba(struct MWInfo *info, int version, int r
                                          char *path, int *handle);
 extern __declspec(naked) void fn_004270c0(int handle);
 extern __declspec(naked) char *fn_004270c6(int handle);
-extern void *data_0057a224;
-extern void *data_0057a228;
-extern void *data_0057a22c;
+extern void *_imp__lp_checkout;
+extern void *_imp__lp_checkin;
+extern void *_imp__lp_errstring;
 
 #ifdef __cplusplus
 }

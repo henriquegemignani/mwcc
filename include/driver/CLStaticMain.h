@@ -28,7 +28,7 @@ extern void abort_execution(void);
 extern void fn_004025d0(void);
 extern void invoke_function_pointer(void);
 extern void call_function_pointer(void);
-extern unsigned char DAT_0057b004[];
+extern unsigned char __xc_a[];
 extern char *argv_buffer;
 extern void (*PTR_fn_00536350)(void);
 extern void (*PTR_fn_00536354)(void);

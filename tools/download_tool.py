@@ -8,6 +8,8 @@
                 the CodeWarrior Windows/x86 compilers the sources build with (OUTPUT: mwcc.exe)
   lib           the MSL C library and runtime sources of CodeWarrior Pro 5, which src/msl and src/runtime build
                 (OUTPUT: lib/ok)
+  mwld          the Pro 5 linker, with the plugins it loads and the runtime objects it links, as an install tree
+                (OUTPUT: a stamp in the tree)
 """
 import io
 import json
@@ -229,18 +231,38 @@ def lib(output):
     output.touch()
 
 
+# the linker's tree from the Pro 5 tools archive: (directory prefix, files: .obj only when "obj")
+MWLD = ("Bin/", "Tools/Command Line Tools/mwld.exe", "Tools/Command Line Tools/lmgr326b.dll",
+        "Tools/Command Line Tools/license.dat", "license.dat", "Win32-x86 Support/Libraries/Runtime/(Sources)/cexc.obj",
+        "Win32-x86 Support/Libraries/Runtime/(Sources)/ccinit.obj", "Win32-x86 Support/Libraries/Runtime/(Sources)/ctls.obj")
+
+
+def mwld(output):
+    root = output.parent
+    with zipfile.ZipFile(Disc(PRO5_BIN, True).file("CODEWA~1.ZIP;1")) as archive:
+        for name in archive.namelist():
+            if not name.endswith("/") and name.startswith(MWLD):
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.read(name))
+    output.touch()
+
+
 def main():
     tool, output = sys.argv[1], Path(sys.argv[2])
     output.parent.mkdir(parents=True, exist_ok=True)
     if sys.platform == "win32" and tool in ("pro5", "pro53", "pro6"):
         # (the compilers check a FlexLM license, which wibo stubs elsewhere: a stub library does here)
         shutil.copy(Path(__file__).parent / "lmgr_stub/lmgr326b.dll", output.parent)
-    if tool in ("compilers", "pro4", "pro5", "pro53", "pro6", "lib") and output.exists():
+    if tool in ("compilers", "pro4", "pro5", "pro53", "pro6", "lib", "mwld") and output.exists():
         # (fixed archives: a restored cache need not be fetched again)
         output.touch()
         return
     if tool == "lib":
         lib(output)
+        return
+    if tool == "mwld":
+        mwld(output)
         return
     if tool == "compilers":
         with zipfile.ZipFile(io.BytesIO(fetch(f"https://files.decomp.dev/compilers_{COMPILERS_TAG}.zip"))) as archive:

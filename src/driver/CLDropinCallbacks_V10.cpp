@@ -83,7 +83,6 @@ unsigned char data_0054cfa4[] = "UCBSecretDetachHandle";
 unsigned char data_0054cfbc[] = "UCBSecretPeekHandle";
 unsigned char data_0054cfd0[] = "UCBCheckoutLicense";
 unsigned char data_0054cffc[] = "UCBCheckinLicense";
-unsigned char data_0054d050[] = "@5B";
 
 
 /* Globals (generated from the original's .bss) */

@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-extern SInt32 argc;
+extern SInt32 __argc;
 struct ToolCommandLine {
     int argc;
     char **argv;

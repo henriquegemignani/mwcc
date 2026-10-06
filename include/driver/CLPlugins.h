@@ -152,6 +152,7 @@ extern char DAT_0057d90a[];
 extern unsigned char plugin_directory_list[];
 extern unsigned char object_flags[];
 extern union PluginDataValidation data_00541578;
+extern UInt32 plugin_data_sizes[];
 extern Plugin *data_0057d91c;
 extern short CLPlugins_CallEntry(Plugin *dispatch, CWPluginPrivateContext *argument);
 extern unsigned int __stdcall return_zero(unsigned int a0);

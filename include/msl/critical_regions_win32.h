@@ -3,10 +3,10 @@
 
 #include "compiler/win32.h"
 
-extern void delete_critical_sections(void);
+extern void __kill_critical_regions(void);
 extern void __begin_critical_region(unsigned int a);
 extern void __end_critical_region(unsigned int a);
-extern void initialize_critical_sections(void);
+extern void __init_critical_regions(void);
 extern struct _RTL_CRITICAL_SECTION DAT_0057d228[5];
 
 #endif

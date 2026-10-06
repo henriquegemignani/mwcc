@@ -15,17 +15,19 @@
 #include <stdlib.h>
 #include <setjmp.h>
 typedef char *(*TextFormatFunction)(char *buffer, unsigned int capacity, const char *format, va_list arguments);
+#pragma inline_intrinsics off
 #pragma auto_inline off
 int fn_0040d8c0(short option, int input, int output, int flags)
 {
     if (data_0054a2f8 != '\0') {
         Option_ForwardVarArgs(0x3e);
     }
-    fn_00404c70(&data_0054a2fc, 0, 7);
+    memset(&data_0054a2fc, 0, 7);
     fn_00420700();
     return 1;
 }
 #pragma auto_inline reset
+#pragma inline_intrinsics reset
 
 #pragma scheduling off
 int parse_optimizer_settings(SInt32 option, unsigned char *options, int unused, UInt32 flags)

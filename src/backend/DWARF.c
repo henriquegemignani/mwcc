@@ -44,7 +44,7 @@
 #include "compiler/Objects.h"
 
 /* Strings (generated from the original's .data) */
-char dwarf_filename[] = "DWARF.c";
+extern char dwarf_filename[];
 
 
 /* Globals (generated from the original's .bss) */

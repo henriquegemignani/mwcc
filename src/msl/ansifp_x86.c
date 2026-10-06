@@ -15,8 +15,10 @@
        /* set: __scalenum divides by the power of ten */
 
 /* st(0) *= 10^eax; a negative exponent flips scale_divide */
-long double *small_pow;
-long double *big_pow;
+extern char small_pow_table[];
+extern char big_pow_table[];
+long double *small_pow = (long double *)small_pow_table;
+long double *big_pow = (long double *)big_pow_table;
 long scale_divide;
 
 static __declspec(naked) void __scalenum(void)

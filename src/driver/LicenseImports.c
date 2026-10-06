@@ -6,14 +6,14 @@ __declspec(naked) int fn_004270ba(struct MWInfo *info, int version, int request,
 {
     asm
     {
-        jmp [data_0057a224]
+        jmp [_imp__lp_checkout]
     }
 }
 
 __declspec(naked) void fn_004270c0(int licenseHandle)
 {
     __asm {
-        jmp data_0057a228
+        jmp _imp__lp_checkin
     }
 }
 
@@ -21,6 +21,6 @@ __declspec(naked) char *fn_004270c6(int handle)
 {
     asm
     {
-        jmp     data_0057a22c
+        jmp     _imp__lp_errstring
     }
 }

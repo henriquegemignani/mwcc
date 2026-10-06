@@ -14,11 +14,12 @@
 #include <stdlib.h>
 #include <msl_internal.h>
 
+
 /* Globals (generated from the original's .bss) */
 int callback_count;
 SInt32 data_0057d21c;
 char *argv_buffer;
-char **argv;
+char **__argv;
 SInt32 exit_callback;
 #define EXIT_TABLE ((void (**)(void)) & data_0057d21c)
 #pragma exceptions off
@@ -64,7 +65,7 @@ void call_exit_callbacks_and_exit(UInt32 exitCode)
         (*EXIT_TABLE[data_0057d21c - 64])();
     }
     __end_critical_region(0);
-    delete_critical_sections();
+    __kill_critical_regions();
     if (exit_callback != 0) {
         ((void (*)(void))exit_callback)();
         exit_callback = 0;
@@ -79,16 +80,16 @@ void free_argv_and_buffer(void)
     if (argv_buffer != NULL) {
         free(argv_buffer);
     }
-    if ((argv != NULL) && (argc != 0)) {
-        free(argv);
+    if ((__argv != NULL) && (__argc != 0)) {
+        free(__argv);
     }
 }
 
 #pragma auto_inline off
 void reset_args(void)
 {
-    argv = data_00536258;
-    argc = 0;
+    __argv = data_00536258;
+    __argc = 0;
     return;
 }
 #pragma auto_inline reset
@@ -102,9 +103,9 @@ void _SetupArgs(void)
     int n;
 
     numchars = 1;
-    argc = 0;
-    argv = (char **)malloc(4);
-    if (argv == NULL) {
+    __argc = 0;
+    __argv = (char **)malloc(4);
+    if (__argv == NULL) {
         reset_args();
         return;
     }
@@ -117,17 +118,17 @@ void _SetupArgs(void)
     while (strchr(arg_whitespace, *p) != NULL)
         p++;
     while (*p != 0) {
-        if (argc + 1 >= numchars) {
+        if (__argc + 1 >= numchars) {
             char **newargv;
             numchars += 16;
-            newargv = (char **)realloc(argv, numchars * 4u);
+            newargv = (char **)realloc(__argv, numchars * 4u);
             if (newargv == NULL)
                 break;
-            argv = newargv;
+            __argv = newargv;
         }
-        n = argc;
-        argv[n] = q;
-        argc++;
+        n = __argc;
+        __argv[n] = q;
+        __argc++;
         (void)n;
         inquote = 0;
         while (*p != 0) {
@@ -150,7 +151,7 @@ void _SetupArgs(void)
         }
     }
     *q = 0;
-    argv[argc] = NULL;
+    __argv[__argc] = NULL;
     register_callback(free_argv_and_buffer);
 }
 
@@ -158,7 +159,7 @@ void _RunInit(void)
 {
     void (**initializer)(void);
 
-    for (initializer = (void (**)(void))&DAT_0057b004; *initializer != NULL; ++initializer) {
+    for (initializer = (void (**)(void))&__xc_a; *initializer != NULL; ++initializer) {
         (*initializer)();
     }
     register_callback(__destroy_global_chain);

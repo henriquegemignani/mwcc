@@ -206,7 +206,7 @@ void PCodeUtilities_EmitAddress(short resultReg, short baseReg, struct Object *o
         if ((int)addressReg == 0) {
             block = gCurrentBlock;
             instruction = block->reverse_instructions;
-            instruction->flags = ~opcode_flags[instruction->opcode][0] & instruction->flags | data_00565d4a;
+            instruction->flags = ~gPCodeOpcodeDescriptors[instruction->opcode].flags & instruction->flags | gPCodeOpcodeDescriptors[137].flags;
             instruction->opcode = PC_LI;
             instruction->operand_count = 2;
             instruction->operandData.operands[1] = instruction->operandData.operands[2];

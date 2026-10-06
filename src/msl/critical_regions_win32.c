@@ -3,7 +3,7 @@
 
 /* Globals (generated from the original's .bss) */
 struct _RTL_CRITICAL_SECTION DAT_0057d228[5];
-void initialize_critical_sections(void)
+void __init_critical_regions(void)
 
 {int iVar1;
 LPCRITICAL_SECTION lpCriticalSection;
@@ -18,7 +18,7 @@ LPCRITICAL_SECTION lpCriticalSection;
   return;
 }
 
-void delete_critical_sections(void)
+void __kill_critical_regions(void)
 
 {
   int iVar1;

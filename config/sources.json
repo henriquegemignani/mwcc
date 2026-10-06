@@ -3362,5 +3362,27 @@
       "lib/msl/win32sdk",
       "lib/msl/win32sdk/sys"
     ]
+  },
+  "src/runtime/throwsbad.cpp": {
+    "compiler": "pro5",
+    "flags": [
+      "-O4,p",
+      "-Cpp_exceptions",
+      "off",
+      "-sym",
+      "off"
+    ],
+    "system_include_dirs": [
+      "lib/runtime",
+      "lib/msl/MSL_Cpp/MSL_Common/Include",
+      "lib/msl/extra",
+      "lib/msl/MSL_Win32/Include",
+      "lib/msl/MSL_Common/Include",
+      "lib/msl/MSL_Common/Src",
+      "lib/msl/MSL_X86",
+      "lib/msl/MSL_Win32/Src",
+      "lib/msl/win32sdk",
+      "lib/msl/win32sdk/sys"
+    ]
   }
 }

@@ -46,7 +46,7 @@ int _CRTStartup(void)
     if (previousCount != 0) {
         return (int)initCount;
     }
-    initialize_critical_sections();
+    __init_critical_regions();
     stream1 = (CFileRec *)malloc(8);
     _HandleTable[0] = stream1;
     if (stream1 != 0) {

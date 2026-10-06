@@ -72,6 +72,16 @@ Project structure
 - `lib/` (downloaded): the MSL C library and runtime sources of CodeWarrior Pro 5, built by `src/msl` and
   `src/runtime`
 
+Linking the compiler from the sources
+-------------------------------------
+
+`ninja build/GC_1_2_5/mwcceppc.exe` (Windows, with `llvm-dlltool` of LLVM on the path) links an executable from the
+compiled sources alone, with the Pro 5 linker (`tools/link.py`; the linker and runtime objects are downloaded to
+`build/mwld`). It reads nothing of the original executable but its list of imports. Data the sources do not define yet
+is in `src/data/raw_data.c` as C literals (`tools/gen_raw_data.py`; `tools/check_data.py` compares a linked image's data
+with the original's). The result compiles like the original: for C and C++ inputs and the options tried, its output
+files and messages are identical.
+
 The source is formatted with `clang-format` (`uv run clang-format -i FILE`).
 
 License

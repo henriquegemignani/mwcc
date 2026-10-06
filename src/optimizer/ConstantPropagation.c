@@ -53,7 +53,7 @@ int gConstantPropagationChanged;
 
 static void SetType(PCodeInstruction *p, short t)
 {
-    p->flags = opcode_flags[t][0] | (p->flags & ~opcode_flags[p->opcode][0]);
+    p->flags = gPCodeOpcodeDescriptors[t].flags | (p->flags & ~gPCodeOpcodeDescriptors[p->opcode].flags);
     p->opcode = (short)t;
 }
 
@@ -148,7 +148,7 @@ void ConstantPropagation_PropagateConstantsInBlock(struct PCodeBlock *block)
             case PC_VMR:
                 if (GetSync(instruction->operandData.operands[1].value.reg, &constant, &replacementType)) {
                     instruction->flags =
-                        (instruction->flags & ~opcode_flags[instruction->opcode][0]) | opcode_flags[replacementType][0];
+                        (instruction->flags & ~gPCodeOpcodeDescriptors[instruction->opcode].flags) | gPCodeOpcodeDescriptors[replacementType].flags;
                     instruction->opcode = replacementType;
                     instruction->operandData.operands[1].kind = PCOp_IMMEDIATE;
                     instruction->operandData.operands[1].value.signed_value = constant;
@@ -319,13 +319,13 @@ void ConstantPropagation_PropagateConstantsInBlock(struct PCodeBlock *block)
                     if (GetConst(instruction->operandData.operands[2].value.reg, &constant)) {
                         if (constant != 0) {
                             instruction->opcode = PC_ORI;
-                            instruction->flags = (instruction->flags & ~DAT_00565a8a) | DAT_00565a3a;
+                            instruction->flags = (instruction->flags & ~gPCodeOpcodeDescriptors[93].flags) | gPCodeOpcodeDescriptors[88].flags;
                             instruction->operandData.operands[2].kind = PCOp_IMMEDIATE;
                             instruction->operandData.operands[2].value.signed_value = constant;
                             instruction->operandData.operands[2].object = NULL;
                         } else {
                             instruction->opcode = PC_MR;
-                            instruction->flags = (instruction->flags & ~DAT_00565a8a) | DAT_00565d6a,
+                            instruction->flags = (instruction->flags & ~gPCodeOpcodeDescriptors[93].flags) | gPCodeOpcodeDescriptors[139].flags,
                             instruction->operand_count = 2;
                         }
                         constantPropagationChanged = gConstantPropagationChanged = 1;
@@ -341,7 +341,7 @@ void ConstantPropagation_PropagateConstantsInBlock(struct PCodeBlock *block)
                             constantPropagationChanged = gConstantPropagationChanged = 1;
                         } else if (constant != 0) {
                             instruction->opcode = PC_ORI;
-                            instruction->flags = (instruction->flags & ~DAT_00565a8a) | DAT_00565a3a;
+                            instruction->flags = (instruction->flags & ~gPCodeOpcodeDescriptors[93].flags) | gPCodeOpcodeDescriptors[88].flags;
                             instruction->operandData.operands[1] = instruction->operandData.operands[2];
                             instruction->operandData.operands[2].kind = PCOp_IMMEDIATE;
                             instruction->operandData.operands[2].value.signed_value = constant;
@@ -349,7 +349,7 @@ void ConstantPropagation_PropagateConstantsInBlock(struct PCodeBlock *block)
                             constantPropagationChanged = gConstantPropagationChanged = 1;
                         } else {
                             instruction->opcode = PC_MR;
-                            instruction->flags = (instruction->flags & ~DAT_00565a8a) | DAT_00565d6a;
+                            instruction->flags = (instruction->flags & ~gPCodeOpcodeDescriptors[93].flags) | gPCodeOpcodeDescriptors[139].flags;
                             instruction->operand_count = 2;
                             instruction->operandData.operands[1] = instruction->operandData.operands[2];
                             constantPropagationChanged = gConstantPropagationChanged = 1;
@@ -390,7 +390,7 @@ void ConstantPropagation_PropagateConstantsInBlock(struct PCodeBlock *block)
                             instruction->opcode = PC_NEG;
                             instruction->operand_count = 2;
                         } else {
-                            instruction->flags = (instruction->flags & ~constant_propagation_clear_mask) | DAT_005659aa;
+                            instruction->flags = (instruction->flags & ~gPCodeOpcodeDescriptors[76].flags) | gPCodeOpcodeDescriptors[79].flags;
                             instruction->opcode = PC_SUBFIC;
                             instruction->operand_count = 4;
                             instruction->operandData.operands[2].kind = PCOp_IMMEDIATE;

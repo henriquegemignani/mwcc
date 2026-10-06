@@ -442,7 +442,7 @@ Boolean validate_plugin(Plugin *plug, const char **errmsg)
         CLIO_WriteFormattedText("%s's newest compatible API version is probably too old for this driver\n",
                                 CLPlugins_GetName(plug));
     }
-    if (size != data_00541578.sizes[flags->descriptorVersion - 3]) {
+    if (size != plugin_data_sizes[flags->descriptorVersion - 1]) {
         *errmsg = "The plugin's DropInFlags has an unexpected size";
         return 0;
     }

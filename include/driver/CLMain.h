@@ -81,7 +81,7 @@ extern int create_default_target(void);
 extern unsigned int check_cmdline_entries(char *context);
 extern UInt8 DAT_00541c0c;
 extern char DAT_00541e4c[];
-extern unsigned short DAT_00541e4e;
+#define DAT_00541e4e (*(unsigned short *)(DAT_00541e4c + 2))
 extern int DAT_00543148;
 extern char *DAT_0057d920;
 extern char *DAT_0057d924;

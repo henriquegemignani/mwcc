@@ -27,6 +27,7 @@
 #include "driver/TargetOptimizer-ppc-eabi.h"
 extern "C" {
 
+extern char data_0054d774[];
 #include <string.h>
 #include <stdlib.h>
 #include "mwcc/Plugins.h"
@@ -699,5 +700,5 @@ PluginC::PluginC() : PluginA(plugin_type, sizeof(PluginC))
     value6 = 0;
     value7 = 0;
     memset(&trailingStorage, 0, 0xa2);
-    sharedValue = "p[B";
+    sharedValue = data_0054d774;
 }

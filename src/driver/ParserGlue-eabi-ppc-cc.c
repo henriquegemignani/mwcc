@@ -37,7 +37,7 @@ int fn_004056a0(void)
         DAT_00537762 = 3;
     }
     if ((0 < data_00587e10) && (data_00537d38 != '\0')) {
-        includes = ParserHelpers_GetFirstEnvironmentVariable("MWCEABIPPCIncludes", 1, &includesEnd);
+        includes = ParserHelpers_GetFirstEnvironmentVariable("MWCEABIPPCIncludes\0MWCIncludes\0", 1, &includesEnd);
         if ((includes != NULL) && (ParserHelpers_ParsePathList(includes, ';', ':', 1, includesEnd, 1, -1, 0) == 0)) {
             return 0;
         }
