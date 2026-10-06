@@ -31,6 +31,28 @@ extern "C" {
 #include <stdlib.h>
 #include "mwcc/Plugins.h"
 #include "driver/CWPluginsPrivate.h"
+
+/* Strings (generated from the original's .data) */
+unsigned char data_0054d184[] = "UCBLoadObjectData";
+unsigned char data_0054d1f4[] = "UCBFreeObjectData";
+unsigned char data_0054d208[] = "UCBDisplayLines";
+unsigned char data_0054d218[] = "UCBBeginSubCompile";
+unsigned char data_0054d250[] = "UCBEndSubCompile";
+unsigned char data_0054d2c4[] = "UCBGetResourceFile";
+unsigned char data_0054d2fc[] = "UCBPutResourceFile";
+unsigned char data_0054d5a4[] = "UCBSBMfiles";
+unsigned char ucb_release_unit_text[] = "UCBReleaseUnit";
+unsigned char data_0054d684[] = "UCBUnitNameToFileName";
+unsigned char data_0054d6d4[] = "UCBGetModifiedFiles";
+unsigned char data_0054d710[] = "UCBGetSuggestedObjectFileSpec";
+unsigned char data_0054d730[] = "UCBGetStoredObjectFileSpec";
+
+
+/* Globals (generated from the original's .bss) */
+SInt32 plugin_type;
+Boolean DAT_00587324;
+CLTargetDirectory precompiled_unit_directory;
+struct CLTarget * default_target;
 /* References, values and path strings supplied to the drop-in callback. */
 
 char reserved[44];

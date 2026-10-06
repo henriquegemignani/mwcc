@@ -46,6 +46,12 @@
 #include <string.h>
 #include <setjmp.h>
 #include <stdio.h>
+
+/* Globals (generated from the original's .bss) */
+char inlineasm_instruction_buffer[1024/sizeof(char)];
+jmp_buf data_00583a68;
+SInt32 DAT_00587f18;
+struct CLabel * clabels;
 typedef struct _res res;
 char *format_inlineasm_instruction(ENode *info)
 {

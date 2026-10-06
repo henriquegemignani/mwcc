@@ -10,6 +10,24 @@
 #include "compiler/PCode.h"
 #include "compiler/PCodeAssembly.h"
 #include "compiler/Scheduler.h"
+
+/* Globals (generated from the original's .bss) */
+InstructionValueEntry execution_unit_instructions[9];
+PCodeInstruction * data_00582d98;
+PCodeInstruction * data_00582da0;
+FuncArg * data_00582da8;
+SInt32 data_00582db0;
+PCodeInstruction * data_00582db8;
+SInt32 data_00582dc0;
+PCodeInstruction * data_00582dc8;
+SInt32 data_00582dd0;
+PCodeInstruction * data_00582dd8;
+PCodeInstruction * data_00582ddc;
+int data_00582de0;
+SInt32 DAT_00582de4;
+SInt32 instruction_retire_index;
+unsigned int next_instruction_slot;
+InstructionValueEntry instruction_ring[16];
 /* Six-byte table records at 0x576418; the length byte is at +1. */
 
 int get_opcode_table_value(PCodeInstruction *instruction)

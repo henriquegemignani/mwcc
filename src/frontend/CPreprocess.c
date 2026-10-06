@@ -13,6 +13,59 @@
 
 #include <stdio.h>
 
+/* Strings (generated from the original's .data) */
+char UCHAR_0Dh_00563350[] = "\r\n";
+char auto_string[] = "auto";
+char DAT_00563388[] = "void";
+char DAT_00563390[] = "char";
+char int_string[] = "int";
+char DAT_005633a4[] = "long";
+char enum_string[] = "enum";
+char DAT_0056341c[] = "in";
+char out_string[] = "out";
+char asm_string[] = "asm";
+char case_string[] = "case";
+char DAT_00563450[] = "if";
+char else_string[] = "else";
+char DAT_0056346c[] = "do";
+char DAT_00563470[] = "for";
+char goto_string[] = "goto";
+char new_string[] = "new";
+char this_string[] = "this";
+char DAT_00563500[] = "try";
+char true_string[] = "true";
+char DAT_005635e8[] = "*=";
+char DAT_005635ec[] = "/=";
+char DAT_005635f0[] = "%=";
+char DAT_005635f4[] = "+=";
+char DAT_005635f8[] = "-=";
+char DAT_005635fc[] = "<<=";
+char DAT_00563600[] = ">>=";
+char DAT_00563604[] = "&=";
+char DAT_00563608[] = "^=";
+char DAT_0056360c[] = "|=";
+char DAT_00563610[] = "||";
+char DAT_00563614[] = "&&";
+char DAT_00563618[] = "==";
+char DAT_0056361c[] = "!=";
+char DAT_00563620[] = "<=";
+char DAT_00563624[] = ">=";
+char DAT_00563628[] = "<<";
+char DAT_0056362c[] = ">>";
+char DAT_00563630[] = "++";
+char DAT_00563634[] = "--";
+char DAT_00563638[] = "->";
+char ellipsis[] = "...";
+char DAT_00563640[] = ".*";
+char DAT_00563644[] = "->*";
+char double_colon[] = "::";
+char at_end_string[] = "@end";
+char self_string[] = "self";
+char bool_name[] = "bool";
+char DAT_00563738[] = "\"\\p";
+char DAT_0056373c[] = "L\"";
+
+
 static inline UInt8 CPreprocess_UseC99Keywords(void)
 {
     return copts.f90;

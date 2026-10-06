@@ -79,6 +79,15 @@ static void setbit(unsigned int bit, BitVector *bv)
 
 #include <string.h>
 
+/* Strings (generated from the original's .data) */
+char propagation_dump_message[] = "Found propagation at %d from %d\n";
+
+
+/* Globals (generated from the original's .bss) */
+SInt32 propagationIndex;
+struct ReplacementCandidate * replacementCandidateTail;
+struct ReplacementCandidate * replacementCandidate;
+
 void IroPropagate_PropagateExpressions(void)
 {
     int wordIndex;

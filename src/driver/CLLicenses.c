@@ -9,6 +9,14 @@
 /* Paired values in the license table. */
 
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+struct License * data_0057ef08;
+UInt32 DAT_0057ef10[252/sizeof(UInt32)];
+int license_slot_count;
+int license_id_counter;
+OSSpec data_005871d8;
+char * license_path;
 int get_license_slot_values(int index, unsigned int *firstValue, int *secondValue)
 {
     if (((0 <= index) && (index < license_slot_count)) && (license_slots[index][1] != 0)) {

@@ -42,6 +42,18 @@
 #include "compiler/Registers.h"
 #include "compiler/Switch.h"
 #include "driver/Files.h"
+
+/* Globals (generated from the original's .bss) */
+void * trans_vtboffsets;
+struct ClassList * base_path[256/sizeof(struct ClassList *)];
+struct Object * DAT_005870d8;
+struct Object * data_0058717c;
+struct CtorInit * ctor_initializers;
+struct Object * class_array_initializer;
+struct HashNameNode * vtable_name;
+struct Object * newh_func;
+struct HashNameNode * unnamed_name;
+SInt16 base_path_depth;
 static Object *CABI_ThisArg(void);
 
 /* CABI.c: C++ class ABI support (vtables, this expressions, generated

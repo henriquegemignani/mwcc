@@ -36,6 +36,27 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* Strings (generated from the original's .data) */
+unsigned char plugin_type_strings[] = "parsing";
+unsigned char compiling_plugin_type[] = "compiling";
+unsigned char data_0054bab8[] = "linking";
+unsigned char data_0054bac0[] = "processing";
+
+
+/* Globals (generated from the original's .bss) */
+char DAT_0057eb68;
+char data_0057eb69;
+UInt8 data_0057eb70;
+UInt8 data_0057eb71;
+OSSpec cachedRecordSpec;
+OSSpec data_0057ecb6;
+char specs_equal;
+char data_0057edfb;
+char data_0057edfc;
+char DAT_0057edfd[259/sizeof(char)];
+char * program_name;
+char data_00587325;
+
 /* "\r\n" */
 
 void CLIO_ReportAssertionFailure(char *message, char *file, unsigned int line)

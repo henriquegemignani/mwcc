@@ -12,6 +12,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <msl_internal.h>
+
+/* Globals (generated from the original's .bss) */
+char errtext[256/sizeof(char)];
 typedef DWORD(__stdcall *PFN1)(HANDLE);
 typedef DWORD(__stdcall *PFN2)(void);
 

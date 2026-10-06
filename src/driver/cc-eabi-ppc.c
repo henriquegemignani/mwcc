@@ -16,6 +16,10 @@
 #include <string.h>
 #include <ctype.h>
 
+/* Globals (generated from the original's .bss) */
+char data_0057f486;
+int data_00588258;
+
 void cc_eabi_ppc_ReportCompilingFunction(char *name)
 {
     char buf[96];

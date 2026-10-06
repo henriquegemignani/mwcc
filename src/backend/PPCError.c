@@ -38,6 +38,14 @@
 #include "compiler/Switch.h"
 #include <setjmp.h>
 
+/* Globals (generated from the original's .bss) */
+void * PTR_00580870;
+struct SavedGlobalValues * saved_global_values_tail;
+UInt16 data_00580878;
+jmp_buf error_jmp_buf;
+struct CException * UINT_00587fc4;
+struct CParseSave * data_00588240;
+
 typedef void (*PCodeGenFn)(ENode *node, SInt32 a, SInt32 b, Operand *dst);
 
 /* Declarations gathered from the merged files. */

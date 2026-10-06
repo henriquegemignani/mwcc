@@ -55,6 +55,20 @@
 #include "compiler/Types.h"
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+FuncArg data_00584748;
+CInt64 token_integer;
+struct HashEntry ** selector_hash;
+struct NameSpaceName * data_00587680;
+struct NameSpaceName * data_00587e64;
+NameSpaceName * runtime_operator_namespace_name;
+NameSpaceName * data_00588008;
+CRec * data_00588064;
+struct Type * sel_type;
+struct FOI member_foi;
+UInt8 member_access;
+unsigned char in_parameter_type_list;
+
 #define CE_ASSERT(c, s)                                                                                                \
     do {                                                                                                               \
         if (c)                                                                                                         \

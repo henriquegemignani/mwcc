@@ -38,6 +38,14 @@
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
 #include "compiler/VectorArraysToRegs.h"
+
+/* Globals (generated from the original's .bss) */
+int load_index_count;
+VectorArrayEntry * load_index_entries;
+struct CodeMotionBits * codeMotionBits;
+unsigned char data_00582c9c;
+int * block_record_counts;
+SInt32 * load_liveness_record_start;
 /* Per-entry storage for the two load-deletion bit sets. */
 void LoadDeletion_BuildLoadLivenessSets(void)
 {

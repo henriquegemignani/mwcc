@@ -21,6 +21,34 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Strings (generated from the original's .data) */
+unsigned char ei_data[] = "EI_DATA";
+unsigned char powerpc_name[] = "PowerPC";
+
+
+/* Globals (generated from the original's .bss) */
+struct CWPluginPrivateContext * plugin_context;
+long data_0057f48c[12];
+SInt32 data_0057f498;
+SInt32 data_0057f49c;
+SInt32 data_0057f4a0;
+int data_0057f4a4;
+unsigned int data_0057f4bc;
+int data_0057f4c0;
+unsigned int file_index;
+unsigned char data_0057f51c[83/sizeof(unsigned char)];
+unsigned char data_0057f56f[33/sizeof(unsigned char)];
+UInt8 nonNativeByteOrder;
+jmp_buf file_input_jmpbuf;
+SInt32 section_size_total;
+SInt32 accumulated_section_size;
+SInt32 limited_diagnostic_count;
+char data_0058770c[588/sizeof(char)];
+char data_00587958;
+SInt32 accumulated_section_sizes;
+SInt32 data_00588228;
+char data_00588517;
+
 typedef char **Handle;
 
 void format_message_and_longjmp()

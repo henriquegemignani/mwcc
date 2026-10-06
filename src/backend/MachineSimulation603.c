@@ -12,6 +12,32 @@
 #include "compiler/PCode.h"
 #include "compiler/PCodeAssembly.h"
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+SInt32 pending_instruction_countdown[4/sizeof(SInt32)];
+Object * data_00582ca8;
+SInt32 data_00582cac;
+SInt32 pending_instruction;
+SInt32 data_00582cb4;
+PCodeInstruction * data_00582cb8;
+SInt32 data_00582cbc;
+PCodeInstruction * data_00582cc0;
+SInt32 data_00582cc4;
+PCodeInstruction * data_00582cc8;
+SInt32 data_00582ccc;
+PCodeInstruction * data_00582cd0;
+SInt32 data_00582cd4;
+Object * data_00582cd8;
+SInt32 data_00582cdc;
+int data_00582ce0;
+SInt32 pending_instruction_count;
+UInt32 pending_instruction_retire_index;
+unsigned int execution_unit_entry_index;
+unsigned int DAT_00582cf4[4/sizeof(unsigned int)];
+SInt32 data_00582cf8;
+SInt32 data_00582d00;
+SInt32 data_00582d08;
+SInt32 data_00582d10;
 int get_opcode_table_entry(PCodeInstruction *instruction)
 {
     return opcode_table[instruction->opcode * 6];

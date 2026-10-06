@@ -40,6 +40,10 @@
 #include "compiler/StackFrameEABI.h"
 #include "compiler/Switch.h"
 #include "driver/Files.h"
+
+/* Globals (generated from the original's .bss) */
+int assembly_buffer_offset;
+UInt32 function_tokenoffset;
 typedef void (*ExpressionGenerator)(ENode *, short, short, Operand *);
 static PCodeInstruction *first_instr(struct PCodeLabel *q)
 {

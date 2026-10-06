@@ -38,6 +38,21 @@
 #include "compiler/TOC.h"
 #include "driver/Files.h"
 #include "compiler/ENode.h"
+
+/* Globals (generated from the original's .bss) */
+struct SwitchCase ** data_00581150;
+struct CaseRange * case_ranges;
+SInt32 switch_case_count;
+SInt32 case_range_count;
+CInt64 data_00581160;
+CInt64 data_00581168;
+CInt64 switchtable_base;
+SInt16 data_00581178;
+SInt16 switchRegHi;
+struct Type * switch_expr_type;
+struct PCodeLabel * default_case_label;
+CInt64 switchtable_max;
+UInt32 data_00581188;
 void Switch_GenerateSwitch(ENode *expression, SwitchInfo *cases)
 {
     SwitchCase *caseNode;

@@ -31,6 +31,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/* Globals (generated from the original's .bss) */
+char DAT_0057e308[260];
+struct NameRegistryEntry * spec_name_registry;
+struct MacSpecEntry ** mac_spec_entries[256];
+unsigned int directory_count;
+char DAT_0057e818[64/sizeof(char)];
+char DAT_0057e858[520/sizeof(char)];
+char file_name_buffer[256/sizeof(char)];
+
 int short_predecessor(short value)
 {
     if (value != 0) {

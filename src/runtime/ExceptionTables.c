@@ -4,6 +4,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <msl_internal.h>
+
+/* Strings (generated from the original's .data) */
+char data_00536030[] = "Unhandled exception: %08x\nAt address:          %08x\n";
+
+/* Globals (generated from the original's .bss) */
+struct _NODE * data_0057d000;
+int data_0057d004;
+char data_0057d008;
 #define CERROR_FILE "unknown.c"
 
 unsigned int _MWCHandler(ExceptionInfo *record, int frame, X86ThreadContext *context)

@@ -53,6 +53,24 @@
 #include <string.h>
 #include <setjmp.h>
 
+/* Globals (generated from the original's .bss) */
+struct PCodeAssemblyEntry * data_00581c58;
+struct PCodeAssemblyEntry ** assembly_list_tail;
+jmp_buf inlineAsmJmpBuf;
+int outgoing_argument_size;
+SInt32 data_005871a0;
+SInt32 asm_instruction_count;
+struct Statement * PTR_00587644;
+UInt32 function_token_line;
+SInt32 stack_frame_size;
+UInt16 function_header_index;
+FOI function_fileinfo;
+UInt8 DAT_005884f4;
+Boolean anyerrors;
+Boolean data_005884fd;
+UInt8 data_0058850d;
+UInt8 func_errors;
+
 static inline void append_assembly(ParsedAsmInstruction *q, PCodeBlock *block)
 {
     PCodeAssemblyEntry *n = (PCodeAssemblyEntry *)CompilerTools_AllocatePool(12);

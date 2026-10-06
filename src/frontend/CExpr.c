@@ -739,6 +739,19 @@ static inline Boolean IsAggregateType(Type *type)
 
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+struct Object * member_function_pointer_call_rtfunc;
+struct Object * cast_member_pointer_func;
+struct Object * rt_memberpointercompare;
+struct Object * memberpointercompare_func;
+struct ENode * converted_expr;
+struct Object * data_00587fd0;
+SInt32 token_value_kind_or_string_length;
+UInt16 DAT_005882de;
+Type data_0058847c;
+char non_type_template_argument_mode;
+UInt8 data_0058850e;
+
 ENode *CExpr_New_ECOND_Node(ENode *condition, ENode *trueExpr, ENode *falseExpr)
 {
     SInt16 cost;

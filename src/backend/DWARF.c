@@ -43,6 +43,31 @@
 
 #include "compiler/Objects.h"
 
+/* Strings (generated from the original's .data) */
+char dwarf_filename[] = "DWARF.c";
+
+
+/* Globals (generated from the original's .bss) */
+SInt32 data_00580fb0[50];
+struct ObjGenRelocation * data_00581078[50];
+UInt8 data_00581140;
+struct DwarfNode * dwarf_node_head;
+struct DwarfNode * currentDwarfNode;
+struct DwarfNode * currentDwarfScope;
+UInt8 data_0058114e;
+struct DWInfo * dwinfo_buckets[512];
+struct PendingObject * pending_objects;
+struct DwarfFunctionState * data_00587168;
+struct GList * section_buffer;
+struct DwarfFunctionState * currentDwarfFunctionState;
+struct ObjGenSection * DAT_00587698;
+struct GList * dwarf_info_buffer;
+struct ObjGenSection * dwarf_section;
+struct DwarfStateList * data_00587ea8;
+struct DwarfNode * current_block_node;
+struct GList * dwarf_lines;
+struct DwarfStateList * dwarf_state_list_tail;
+
 /* The compiler walks a type graph, marking each type record it visits.
  * The record at argument 2 holds the type at offset 0, a "visited" marker
  * at offset 0x18 and a lazily created debug-information entry at 0x1a. */

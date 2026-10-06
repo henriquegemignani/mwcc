@@ -45,6 +45,13 @@
 /* Declarations gathered from the merged files. */
 
 #include "compiler/ENode.h"
+
+/* Globals (generated from the original's .bss) */
+struct IROLinear * saved_node;
+struct VarRecord * var_records_tail;
+struct IROVarPart * var_part_use_tail;
+struct IROVarPart * class_data_parts;
+UInt8 data_00588510;
 static inline int fn_0044a6f0_inline1(VarRecord *a1)
 {
     int v11;

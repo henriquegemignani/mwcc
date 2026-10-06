@@ -35,6 +35,15 @@
 #include "compiler/Registers.h"
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+SInt32 copy_propagation_mode;
+struct CopyPropagationBitSets * copyPropagationBitSets;
+int gCopyPropagationChanged;
+UInt32 * block_copy_counts;
+SInt32 copyCount;
+struct CodeMotionRec * code_motion_records;
+SInt32 * blockCopyStartIndices;
 static inline SInt32 CanPropagateCopy(SInt32 copyIndex, CodeMotionListNode *useNode)
 {
     for (; useNode != NULL; useNode = useNode->next) {

@@ -21,6 +21,24 @@
 
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+SInt32 data_00583018[8/sizeof(SInt32)];
+unsigned char data_00583020[8/sizeof(unsigned char)];
+SInt32 data_00583028;
+unsigned char data_00583030[8/sizeof(unsigned char)];
+struct PCodeInstruction * data_00583038[8/sizeof(struct PCodeInstruction *)];
+SInt32 data_00583040;
+int data_00583048;
+UInt32 data_0058304c;
+UInt32 data_00583050;
+unsigned int record_enqueue_index;
+QueueSlot queue_slots[6];
+SInt32 data_00583060;
+SInt32 data_00583068;
+SInt32 data_00583070;
+SInt32 data_00583078;
+SInt32 data_00583080;
+
 /* 0x5842e1, byte access */
 
 /* PCodeBlock: the object a liveness entry is indexed by; its block number

@@ -43,6 +43,55 @@
 #include "driver/TargetPanels-eabi-ppc.h"
 #include "driver/libimp-eabi-ppc.h"
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+char text_section_name[] = ".text";
+
+
+/* Globals (generated from the original's .bss) */
+UInt8 elfBigEndian;
+SInt32 symbol_order_count;
+unsigned char data_00580df6[128/sizeof(unsigned char)];
+char file_name[256/sizeof(char)];
+struct ObjGenSection ** ordered_section_index;
+SInt32 pcodeBlockOrderIndex;
+struct COpts copts;
+int gPCodeBlockCount;
+SInt32 data_005876b4;
+struct PCodeBlock * gPCodeBlocks;
+struct ElfHeader elf_header;
+struct ObjGenRelocation * relocation_list;
+struct NameSpace * registration_context;
+struct PCodeBlock ** gPCodeBlockOrder;
+struct TypeClass * data_00588040;
+UInt8 * cprep_cu;
+void * symbol_order_tail;
+Object * data_00588238;
+struct NameSpace * currentNameSpace;
+void * interrupt_generation_records;
+UInt16 data_0058847a;
+UInt8 DAT_0058849e;
+SInt32 data_005884a0;
+short sectionHeaderCount;
+struct ObjGenSection * section_list;
+struct ObjGenSection * data_005884aa;
+struct ObjGenSection * data_005884ae;
+struct ObjGenSection * data_005884b2;
+struct ObjGenSection * data_005884b6;
+struct ObjGenSection * data_005884ba;
+struct ObjGenSection * data_section_linked_symbol;
+struct ObjGenSection * dwarf_info_section;
+struct ObjGenSection * dwarf_line_section;
+struct ObjGenSection * data_005884ca;
+struct ObjGenSection * data_005884ce;
+struct ObjGenSection * symbol_string_table_section;
+struct ObjGenSection * shstrtab_section;
+struct ObjGenSection * data_005884da;
+struct ObjGenSection * data_005884de;
+struct ObjGenSection * data_005884e2;
+struct SectionSymbolAttributes * section_symbol_attributes;
+UInt16 data_005884ee;
+UInt8 data_005884f8;
 /* Enters THECLASS's scope, saving the current one in SAVE. */
 NameSpace *BE_elf_SaveAndSetClassScope(TypeClass *theclass, CScopeSave *save)
 {

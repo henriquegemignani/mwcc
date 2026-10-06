@@ -18,6 +18,13 @@
 #include <setjmp.h>
 #include <string.h>
 #include "driver/CLDropinCallbacks_V10.h"
+
+/* Globals (generated from the original's .bss) */
+struct CWPluginPrivateContext * pluginPrivateContext;
+char data_00587d04[256/sizeof(char)];
+int data_00587e14;
+Boolean output_path_set;
+unsigned char data_00588530;
 #define OPTION_ASSERT(cond, line) ((cond) ? (void)0 : CLIO_ReportAssertionFailure(#cond, "ParserHelpers-cc.c", line))
 #define PR_UNSET 0
 int append_undef_directive(char *option, int unused, char *symbol)

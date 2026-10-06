@@ -30,6 +30,10 @@
 #include "compiler/Switch.h"
 #include "driver/Files.h"
 #include <stdio.h>
+
+/* Globals (generated from the original's .bss) */
+struct _FILE * iro_dump_output;
+int INT_005882b8;
 unsigned int IroDump_IsType1NodeType50(IROLinear *linear)
 {
     if (linear->type == IROLinearOperand && linear->u.node->type == 50U)

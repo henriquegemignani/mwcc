@@ -53,6 +53,32 @@
 
 #include "compiler/ENode.h"
 
+/* Globals (generated from the original's .bss) */
+EvalMode evalMode;
+AllocState alloc_state;
+struct MemoNode * memo_list;
+Object ** data_00582456;
+struct InlineSlot * data_0058245a;
+struct CInlineVar * data_0058245e;
+struct CInlineVar * data_00582462;
+char inline_call_seen;
+char data_00582467;
+SInt16 data_00582468;
+struct IFixup * fixup_list;
+struct Statement * inline_statements;
+struct ENode * inline_call_expressions[64/sizeof(struct ENode *)];
+short inline_call_count;
+char inline_statement_mode;
+char data_005824b5;
+struct InlineNode * deferredInlineNodes;
+struct CPrecNode * pending_prec_nodes;
+struct InlineObjectEntry * undefined_function_objects;
+Boolean dispatching_deferred_node;
+char data_005824c3;
+struct CPrecNode * pendingInlineWork;
+SInt32 data_00587184;
+SInt32 data_00588454;
+
 #pragma auto_inline off
 SInt16 CInline_ReturnZero(Type *type)
 {

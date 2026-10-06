@@ -46,6 +46,11 @@
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
 
+/* Globals (generated from the original's .bss) */
+UInt32 * registers_used_outside_loop;
+UInt32 * self_addi_candidate_regs;
+SInt32 data_00582c70;
+
 #define NULL 0
 
 #define CE_ASSERT(c, s)                                                                                                \

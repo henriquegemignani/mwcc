@@ -41,6 +41,21 @@
 #include "compiler/Switch.h"
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+struct COptCSE * cse_entries[75];
+struct OptimizerOccurrence * occurrence_list;
+UInt8 gUsedPhysicalGPR[32/sizeof(UInt8)];
+unsigned char gUsedPhysicalFPR[32];
+UInt8 gUsedPhysicalVR[32/sizeof(UInt8)];
+short gSaveSpan;
+unsigned char gSavedUsedPhysicalRegisters[32];
+short gInitialObjectVRLast;
+short gVRCounterCheckpoint;
+short gInitialObjectGPRLast;
+short gInitialObjectFPRLast;
+short gFPRCounterCheckpoint;
+short gGPRCounterCheckpoint;
+
 /* The cost of evaluating CSE's expression tree: its nodes, the divisions and multiplications twice, and the loads
    of variables that cannot live in a register. */
 int Registers_GetCSEWeight(COptCSE *tree)

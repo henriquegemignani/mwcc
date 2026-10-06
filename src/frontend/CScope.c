@@ -42,6 +42,15 @@
 #include "compiler/Objects.h"
 #include "compiler/Types.h"
 
+/* Globals (generated from the original's .bss) */
+struct TypeClass * class_path_base;
+struct HashNameNode * class_member_name;
+struct TypeClass * found_class;
+struct Type * data_00580de4;
+UInt32 class_path_offset;
+UInt8 data_00580dec;
+SInt8 data_00580ded;
+
 #undef CERROR_FILE
 #define CERROR_FILE "CScope.c"
 #undef CError_FATAL

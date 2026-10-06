@@ -4906,6 +4906,21 @@ static ENode *mkTemp(Type *t)
 
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+SInt32 conversion_score;
+void * array_bound;
+ComparisonValues bestComparison;
+SInt16 data_005806aa;
+SInt16 data_005806ac;
+SInt16 data_005806ae;
+SInt16 data_005806b0;
+UInt8 expr_search_types[150/sizeof(UInt8)];
+SInt32 data_0058074c;
+struct Object * destructor_aware_call_rtfunc;
+struct Object * array_allocation_runtime_function;
+struct Object * destructor_aware_call_func;
+UInt8 data_0058852b;
+
 ENode *CExpr2_RewriteExprToTemp(ENode *expr)
 {
     ENode *temp;

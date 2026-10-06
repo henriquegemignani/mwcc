@@ -28,6 +28,30 @@
 #define va_start(ap, parm) ap = (char *)&parm + ((((char *)(&parm + 1) - (char *)&parm) + 3) / 4 * 4)
 
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+char formatted_message[1024/sizeof(char)];
+struct TokenText * token_texts;
+int coalesced_argument_count;
+int coalesced_argument_capacity;
+unsigned char data_0057e06c;
+int data_0057e070;
+int arg_index;
+char ** data_0057e078;
+unsigned char operation_record[324/sizeof(unsigned char)];
+unsigned char data_0057e1c0[12/sizeof(unsigned char)];
+char * token_cursor;
+char * data_0057e1d0;
+int data_0057e1d4;
+int data_0057e1d8;
+int data_005876ac;
+char data_00587e1d;
+char * data_00587eb0;
+char argument_space;
+char argument_space_char;
+char data_00588505;
+char data_00588519;
+char data_0058852c;
 void Targets_FormatAndDispatchMessage(char *message, char *arguments)
 {
     vsprintf(formatted_message, message, (char *)(unsigned int *)arguments);

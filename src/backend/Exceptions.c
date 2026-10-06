@@ -32,6 +32,19 @@
 #include "compiler/Registers.h"
 #include "compiler/StackFrameEABI.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+struct ExceptionScopeEntry * exception_scope_entries;
+struct ExceptionScopeEntry * last_exception_scope_entry;
+GList exception_records;
+struct ObjGenRelocationRequest * exception_table_relocation_requests;
+struct ObjGenRelocationRequest * relocation_request_tail;
+void * object_groups[72/sizeof(void *)];
+short gVRSaveSpan;
+SInt16 data_005883ee;
+short gFPRSaveSpan;
+SInt16 gGPRSaveSpan;
+UInt8 data_0058852d;
 /* Layouts of the exception scope records used by this routine. */
 
 #pragma opt_lifetimes off

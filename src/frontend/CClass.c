@@ -45,6 +45,27 @@
 #include "driver/Files.h"
 #include "compiler/ENode.h"
 
+/* Globals (generated from the original's .bss) */
+struct TypeClass * current_class;
+PendingThunk * pending_thunks;
+struct TypeClass * base_path_class;
+SInt32 base_path_offset;
+UInt8 base_path_status;
+UInt8 * data_00581caa;
+SInt32 vtable_size;
+void * rtti_offset_table;
+struct ClassLayout * virtual_base_layout;
+struct ClassLayout * root_class_layout;
+SInt32 data_00581cc2;
+Boolean data_00581cc6;
+struct HashNameNode * destructor_name;
+struct TypeClass * data_00587140;
+struct HashNameNode * constructor_name;
+struct HashNameNode * this_arg_name;
+struct HashNameNode * this_self_name;
+struct HashNameNode * assignment_operator_name;
+SInt16 base_path_level;
+
 /* Declarations gathered from the merged files. */
 
 typedef struct CClassObj CClassObj;

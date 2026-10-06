@@ -649,6 +649,14 @@ unsigned int calculate_resource_sizes(ResFile *root, unsigned int *dataSize, uns
 
 #include <stddef.h>
 
+/* Globals (generated from the original's .bss) */
+short resource_error;
+SInt16 current_resfile_refnum;
+struct ResFile * resfile_list;
+struct IdentifierListNode * identifier_list;
+struct IdentifierListNode * identifier_list_tail;
+UInt8 data_00588525;
+
 void write_resource_file(short refnum)
 {
     const SInt32 resourceHeaderSize = sizeof(ResHead);

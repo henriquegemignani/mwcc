@@ -25,6 +25,16 @@
 #include <stdio.h>
 #include <setjmp.h>
 
+/* Globals (generated from the original's .bss) */
+struct Pool galloc_pool;
+struct Pool data_0057fd84;
+struct Pool block_pool;
+struct Pool data_0057fdac;
+struct Pool heap_pool;
+SInt16 data_0057fdd8;
+char message_buffer[2048/sizeof(char)];
+int next_name_id;
+
 #define VA_ARG(ap, T) (*(T *)((ap += 4) - 4))
 
 static unsigned short swap16(unsigned short x)

@@ -41,6 +41,29 @@
 #include "driver/Files.h"
 #include "compiler/Objects.h"
 
+/* Globals (generated from the original's .bss) */
+struct Statement * current_statement;
+UInt8 data_0057f6b4;
+UInt8 data_0057f6b5;
+int linear_index_counter;
+SInt32 data_00587148;
+SInt32 data_005871b0;
+Object * data_005875b8;
+struct IROLinear * last_linear;
+SInt32 data_005876e4;
+struct Statement * current_optimizer_statement;
+SInt32 data_00587e50;
+struct List12 * temporary_list;
+SInt32 data_00587f08;
+struct IROLinear * linear_head;
+SInt32 data_0058800c;
+SInt32 data_005880c8;
+struct Statement * statement_insertion_point;
+unsigned int data_00588234;
+SInt32 data_00588244;
+UInt8 data_00588518;
+UInt8 data_00588526;
+
 void fn_0042c920(void)
 {
     return;

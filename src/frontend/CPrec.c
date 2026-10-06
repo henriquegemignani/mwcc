@@ -57,6 +57,25 @@
 
 #include "compiler/ENode.h"
 
+/* Globals (generated from the original's .bss) */
+struct CPrecWrittenEntry ** written_entry_buckets;
+struct SerializedBucketEntry * serialized_bucket_entries;
+struct CPrecElem * serialized_buckets;
+CPrecWrittenEntry ** data_00581c02;
+struct SavedPrepTokenList * saved_prep_tokens;
+SInt32 * global_pointer_entries;
+SInt32 serialized_bucket_count;
+SInt32 prec_position;
+SInt32 flushed_size;
+UInt8 * precompiled_header_base;
+UInt8 data_00581c28;
+SInt32 data_00581c2a;
+struct TemplateFunction * templateFunctions;
+struct Macro ** macro_buckets;
+char * data_00587e84;
+struct CSOMRefNode * somReferences;
+struct TypeClassTemplate * class_template_list;
+
 /* Declarations gathered from the merged files. */
 /* Calls deferred until the precompiled data has been loaded. */
 

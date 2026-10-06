@@ -53,6 +53,36 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Strings (generated from the original's .data) */
+char data_0057238c[] = "r";
+char data_0057238e[] = "f";
+char data_00572390[] = "v";
+char data_00572392[] = "S";
+char data_00572394[] = "cr";
+char registration_message_format[] = "%s%d";
+
+
+/* Globals (generated from the original's .bss) */
+jmp_buf template_declaration_jmpbuf;
+Boolean data_00582108;
+struct RegisterBinding * register_binding_hash[64];
+struct RegistrationHashEntry * inlineAsmRegisterHashTable[64];
+struct RegistrationHashEntry * secondary_registration_hash[64];
+struct InlineAsmRegisterEntry inlineAsmRegisterEntry;
+SInt16 data_00582438;
+SInt16 data_0058243a;
+SInt32 data_0058243c;
+SInt32 source_line;
+struct NameLookupLink * asmOperandPatternLookup[256];
+void * DAT_00584cb4[4/sizeof(void *)];
+void * DAT_00584cb8[4/sizeof(void *)];
+struct NameLookupLink * DAT_00584cbc[256];
+struct NameLookupLink * DAT_00584cc0[4/sizeof(struct NameLookupLink *)];
+struct NameLookupLink * DAT_00584cc4[4/sizeof(struct NameLookupLink *)];
+struct NameLookupLink * DAT_00584cc8[256];
+struct NameLookupLink * DAT_00584ccc[996/sizeof(struct NameLookupLink *)];
+SInt16 objectReferenceEntryCount;
+
 /* Declarations gathered from the merged files. */
 
 #define CE_ASSERT(c, s)                                                                                                \

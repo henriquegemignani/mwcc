@@ -49,6 +49,43 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+/* Strings (generated from the original's .data) */
+char const_string[] = "const";
+char volatile_string[] = "volatile";
+char restrict_name[] = "restrict";
+char data_00551938[] = "asm";
+char pascal_string[] = "pascal";
+char inline_string[] = "inline";
+char reference_type_error_text[] = "& reference type";
+char explicit_keyword[] = "explicit";
+char data_0055196c[] = "mutable";
+char virtual_str[] = "virtual";
+char friend_keyword[] = "friend";
+char in_string[] = "in";
+char data_00551988[] = "out";
+char inout_string[] = "inout";
+char bycopy_string[] = "bycopy";
+char byref_string[] = "byref";
+char oneway_string[] = "oneway";
+char declspec_illegal_use_string[] = "__declspec(interrupt)";
+char illegal_flags_attribute_text[] = "__attribute__((aligned(\077)))";
+char cerror_filename[] = "CError.c";
+
+
+/* Globals (generated from the original's .bss) */
+int buffered_token;
+short data_005805ec;
+int data_005805ee;
+char data_005830c8[32/sizeof(char)];
+char error_message_buffer[256/sizeof(char)];
+struct ObjectReferenceEntry * object_reference_stack;
+int data_0058715c;
+SInt32 line_count;
+int writtenEntry;
+UInt16 iro_node_count;
+char data_005883ec[2/sizeof(char)];
+UInt8 DAT_00588516;
+
 typedef char *va_list;
 
 #define va_start(ap, last)                                                                                             \

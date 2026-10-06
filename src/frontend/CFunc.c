@@ -53,6 +53,20 @@
 
 #include "compiler/Types.h"
 
+/* Globals (generated from the original's .bss) */
+struct Object * localstatic_init_guard;
+struct CLabel * data_0058087e;
+unsigned char data_00580882;
+struct ENode * deferred_expression;
+struct FuncArg * default_arg;
+UInt8 data_0058088c;
+SInt16 local_name_counter;
+struct CleanNode * data_00580890;
+struct BufferedToken declaration_token;
+struct HashNameNode * blank_argument_name;
+struct PendingFunction * pending_functions;
+UInt8 DAT_00588523;
+
 /* Declarations gathered from the merged files. */
 enum FlagVal { FLAGVAL_FALSE, FLAGVAL_TRUE };
 

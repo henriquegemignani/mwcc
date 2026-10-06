@@ -46,6 +46,26 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Globals (generated from the original's .bss) */
+Object * data_00580fa8;
+SInt32 stack_frame_adjustment;
+int stack_frame_padding;
+SInt32 eabi_stack_frame_size;
+SInt32 data_00587634;
+SInt32 data_00587638;
+int data_0058764c;
+int data_005876a8;
+unsigned long data_00587e40;
+SInt32 special_register_save_offset;
+SInt32 frame_alignment_padding;
+SInt32 r12_save_offset;
+int interrupt_register_save_mask;
+UInt32 vrsave_mask;
+SInt32 data_00588070;
+unsigned int data_005880cc;
+int data_005880d8;
+SInt32 data_00588204;
+
 /* Declarations gathered from the merged files. */
 
 enum { STRUCT_KIND_4 = 4, STRUCT_KIND_14 = 14 };

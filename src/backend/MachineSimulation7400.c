@@ -9,6 +9,57 @@
 #include "compiler/PCodeAssembly.h"
 #include "compiler/Scheduler.h"
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+CountedSlot pipeline_slots[18];
+struct PCodeInstruction * DAT_00582f08;
+int DAT_00582f0c;
+struct PCodeInstruction * DAT_00582f10;
+int DAT_00582f14;
+struct PCodeInstruction * DAT_00582f18;
+int DAT_00582f1c;
+struct PCodeInstruction * DAT_00582f20;
+int DAT_00582f24;
+struct PCodeInstruction * DAT_00582f28;
+int DAT_00582f2c;
+struct PCodeInstruction * DAT_00582f30;
+int DAT_00582f34;
+struct PCodeInstruction * DAT_00582f38;
+int DAT_00582f3c;
+struct PCodeInstruction * DAT_00582f40;
+int DAT_00582f44;
+PCodeInstruction * DAT_00582f48;
+int DAT_00582f4c;
+PCodeInstruction * primary_instruction;
+int DAT_00582f54;
+struct PCodeInstruction * DAT_00582f58;
+int DAT_00582f5c;
+struct PCodeInstruction * DAT_00582f60;
+int DAT_00582f64;
+PCodeInstruction * completed_instruction;
+int DAT_00582f6c;
+PCodeInstruction * DAT_00582f70;
+int DAT_00582f74;
+PCodeInstruction * DAT_00582f78;
+int DAT_00582f7c;
+PCodeInstruction * DAT_00582f80;
+int DAT_00582f84;
+struct PCodeInstruction * DAT_00582f88;
+int DAT_00582f8c;
+PCodeInstruction * pipelineCompletedInstruction;
+PCodeInstruction * pipeline_completed_instruction;
+int DAT_00582f98;
+int queued_instruction_count;
+unsigned int pipeline_index;
+SInt32 simulationWriteIndex;
+CountedSlot instruction_queue[8];
+unsigned int _DAT_00582fb0;
+unsigned int _DAT_00582fb8;
+unsigned int _DAT_00582fc0;
+unsigned int _DAT_00582fc8;
+unsigned int _DAT_00582fd0;
+unsigned int _DAT_00582fd8;
+unsigned int _DAT_00582fe0;
 int fn_0052f370(PCodeInstruction *instruction)
 {
     return DAT_00577660[instruction->opcode].kind == '\n';

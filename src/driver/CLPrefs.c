@@ -25,6 +25,9 @@
 #pragma auto_inline off
 #include <ctype.h>
 
+/* Globals (generated from the original's .bss) */
+NameTableEntry * name_table_entries;
+
 #pragma auto_inline reset
 
 StorageHandle *CLPrefs_CopyDestinationToTemporary(NameTableEntry *preferences)

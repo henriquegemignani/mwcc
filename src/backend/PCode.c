@@ -29,6 +29,9 @@
 #include "compiler/PCodeUtilities.h"
 #include "compiler/Switch.h"
 
+/* Globals (generated from the original's .bss) */
+short next_label_number;
+
 enum {
     OperandKind_GPR = 0,
     OperandKind_Address = 1,

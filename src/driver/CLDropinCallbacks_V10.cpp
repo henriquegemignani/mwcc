@@ -56,6 +56,39 @@ extern "C" {
 
 #include "driver/CLFileOps.h"
 
+/* Strings (generated from the original's .data) */
+unsigned char data_0054cb54[] = "UCBReleaseFileText";
+unsigned char ucb_get_segment_info_text[] = "UCBGetSegmentInfo";
+unsigned char data_0054cb94[] = "UCBGetOverlay1FileInfo";
+unsigned char data_0054cbac[] = "UCBGetOverlay1Info";
+unsigned char ucb_show_status_text[] = "UCBShowStatus";
+unsigned char data_0054cc40[] = "UCBUserBreak";
+unsigned char data_0054cc50[] = "UCBGetNamedPreferences";
+unsigned char data_0054cc68[] = "UCBStorePluginData";
+unsigned char ucb_get_plugin_data_text[] = "UCBGetPluginData";
+unsigned char ucbAllocateMemoryText[] = "UCBAllocateMemory";
+unsigned char ucb_free_memory_text[] = "UCBFreeMemory";
+unsigned char data_0054ce2c[] = "UCBAllocMemHandle";
+char data_0054ce40[] = "UCBFreeMemHandle";
+unsigned char data_0054ce54[] = "UCBGetMemHandleSize";
+unsigned char data_0054ce7c[] = "UCBLockMemHandle";
+unsigned char data_0054ce90[] = "UCBUnlockMemHandle";
+unsigned char ucb_get_target_name_text[] = "UCBGetTargetName";
+unsigned char ucb_pre_dialog_string[] = "UCBPreDialog";
+unsigned char ucb_post_dialog_name[] = "UCBPostDialog";
+unsigned char ucb_pre_file_action_name[] = "UCBPreFileAction";
+unsigned char data_0054cf24[] = "UCBPostFileAction";
+unsigned char data_0054cf8c[] = "UCBSecretAttachHandle";
+unsigned char data_0054cfa4[] = "UCBSecretDetachHandle";
+unsigned char data_0054cfbc[] = "UCBSecretPeekHandle";
+unsigned char data_0054cfd0[] = "UCBCheckoutLicense";
+unsigned char data_0054cffc[] = "UCBCheckinLicense";
+unsigned char data_0054d050[] = "@5B";
+
+
+/* Globals (generated from the original's .bss) */
+SInt32 data_005871d0;
+
 static inline void SetFileDependencyCode(struct ExportedRecord *fileInfo, short dependencyCode)
 {
     fileInfo->code = dependencyCode;

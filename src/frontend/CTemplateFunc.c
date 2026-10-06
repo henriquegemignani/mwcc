@@ -36,6 +36,12 @@
 #include "compiler/Switch.h"
 #include "driver/Files.h"
 
+/* Globals (generated from the original's .bss) */
+Boolean data_005824c8;
+UInt8 template_argument_depth;
+SInt32 data_005824ca;
+UInt8 data_005824ce;
+
 /* Declarations gathered from the merged files. */
 
 #define CE_ASSERT(c, s)                                                                                                \

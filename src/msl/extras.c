@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <msl_internal.h>
+
+/* Globals (generated from the original's .bss) */
+int data_00587c70;
 #define CERROR_FILE "unknown.c"
 
 int __cdecl _strnicmp(char *left, char *right, int count)

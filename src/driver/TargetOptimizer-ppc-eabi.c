@@ -9,6 +9,29 @@
 #include "driver/ParserGlue-eabi-ppc-cc.h"
 #include "driver/StringUtils.h"
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+unsigned char generic_ppc_message[] = "generic PPC";
+unsigned char data_0054c5d0[] = "401";
+unsigned char data_0054c5d4[] = "403";
+unsigned char data_0054c5d8[] = "505";
+unsigned char data_0054c5dc[] = "509";
+unsigned char data_0054c5e0[] = "555";
+unsigned char data_0054c5e4[] = "601";
+unsigned char data_0054c5e8[] = "602";
+unsigned char data_0054c5ec[] = "603";
+unsigned char data_0054c5f0[] = "603e";
+unsigned char data_0054c5f8[] = "604";
+unsigned char data_0054c5fc[] = "604e";
+unsigned char data_0054c604[] = "740";
+unsigned char data_0054c608[] = "750";
+unsigned char data_0054c60c[] = "801";
+unsigned char data_0054c610[] = "821";
+unsigned char data_0054c614[] = "823";
+unsigned char data_0054c618[] = "850";
+unsigned char data_0054c61c[] = "8260";
+unsigned char data_0054c628[] = "\077\077\077";
+
 #pragma optimization_level 2
 int TargetOptimizer_ppc_eabi_SetOption(short option, char enabled)
 {

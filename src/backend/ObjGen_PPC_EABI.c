@@ -49,6 +49,33 @@
 #include "compiler/Objects.h"
 
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+char DAT_0055d48c[] = "RX";
+char rw_section_permissions[] = "RW";
+
+
+/* Globals (generated from the original's .bss) */
+Boolean data_00580d80;
+struct ObjGenSection * default_code_section;
+struct ObjGenSection * defaultDataSection;
+struct ObjGenSection * default_f32_section;
+struct ObjGenSection * savedDefaultDataSection;
+struct ObjGenSection * default_data_section;
+UInt8 section_table_dirty;
+SInt32 uid_counter;
+SInt32 object_storage_size;
+SInt32 object_data_size;
+SInt32 data_00580da4;
+SInt32 data_00580da8;
+int DAT_00580dac;
+struct ObjGenSection * DAT_00580db0;
+SInt32 * data_00580db4;
+struct BufferUpdate * pending_buffer_updates;
+struct BufferUpdate * pending_data_tail;
+struct CNameNode * data_005870e8;
+SInt32 output_buffer_length;
+struct CNameNode * data_00587ff8;
 void ObjGen_PPC_EABI_EmitSerializedFormat(Object *key, int index)
 {
     struct ObjGenSection *output;

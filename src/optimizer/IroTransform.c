@@ -37,6 +37,14 @@
 /* Links in the expression work list. */
 
 #include "compiler/ENode.h"
+
+/* Strings (generated from the original's .data) */
+char reverse_op_format[] = "ReverseOp For Monmin at: %d\n";
+
+
+/* Globals (generated from the original's .bss) */
+struct ENodeList * eadd_terms;
+ENodeList * eadd_terms_tail;
 typedef enum { MutEnumByte_one = 1 } MutEnumByte;
 ENode *IroTransform_CombineEAddTerms(ENode *expression)
 {

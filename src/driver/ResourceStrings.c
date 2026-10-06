@@ -6,6 +6,10 @@
 
 #include <stdio.h>
 
+/* Globals (generated from the original's .bss) */
+ResourceRegistration resourceRegistrations[16];
+char resource_string_buffer[64/sizeof(char)];
+
 int ResourceStrings_AddResource(char *resourceData, short resourceId, char **resourceValue)
 {
     int i;

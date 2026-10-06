@@ -21,6 +21,15 @@
 #include <setjmp.h>
 #include "driver/CLDropinCallbacks_V10.h"
 
+/* Globals (generated from the original's .bss) */
+char match_path_buffer[264/sizeof(char)];
+int data_00587e18;
+UInt8 data_00587e1c;
+Boolean data_00587e20;
+Boolean targets_value_null_or_zero;
+Boolean tool_checks_passed;
+char data_0058851b;
+
 #define va_start(ap, parm) ap = (char *)&parm + ((((long)((char *)&parm + 2) - (long)&parm) + 3) / 4 * 4)
 int get_spec_from_signature_callback(const char *path, OSSpec *spec)
 {

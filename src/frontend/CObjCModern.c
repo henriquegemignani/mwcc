@@ -41,6 +41,11 @@
 #include "driver/Files.h"
 #include <string.h>
 #include <stdio.h>
+
+/* Globals (generated from the original's .bss) */
+struct NamedObjectCacheEntry * named_object_cache;
+SInt32 data_00587f6c;
+SInt32 selector_reference_count;
 static HashEntry *FindHashNode(HashNameNode *name)
 {
     struct HashEntry *rec;

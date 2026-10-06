@@ -26,6 +26,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Strings (generated from the original's .data) */
+char link_string[] = "Link";
+
+
 /* Tool selection entry; fields not used here are retained as opaque bytes. */
 
 /* Stored command arguments and optional additional argument vector. */

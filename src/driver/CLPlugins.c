@@ -23,6 +23,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Globals (generated from the original's .bss) */
+PluginDesc plugin_desc;
+char DAT_0057d90a[18/sizeof(char)];
+Plugin * data_0057d91c;
+
 typedef short(__stdcall *code_short)(void *);
 
 typedef short(__stdcall *cb_t)(char **);

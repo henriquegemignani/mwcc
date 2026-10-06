@@ -33,6 +33,20 @@
 #include "driver/Memory.h"
 /* Buffered lexical item and its associated value. */
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+char xor_keyword[] = "xor";
+char s_xor_eq_0055df94[] = "xor_eq";
+char long_keyword[] = "long";
+char goto_keyword[] = "goto";
+char do_keyword[] = "do";
+
+
+/* Globals (generated from the original's .bss) */
+UInt8 data_00580dd0;
+Boolean data_00587010;
+UInt8 data_005884fc;
+unsigned char data_0058851a;
 #define KW(s, n) (memcmp(s, (char *)(data_00587fa0->name), n) == 0)
 SInt16 CPrepTokenizer_GetToken(void)
 {

@@ -53,6 +53,17 @@
 
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+UInt32 * gInterferenceBits;
+short * gCoalescedRegisters;
+struct PCodeLiveness * gPCodeBlockLiveness;
+short gGPRCoalesceFirst;
+short gFPRCoalesceFirst;
+short gFPRCoalesceLast;
+short gGPRCoalesceLast;
+short gVRCoalesceFirst;
+short gVRCoalesceLast;
+
 static void SC_Interfere(unsigned int a, unsigned int b);
 
 static const char *SpillCode_RegisterFormat(int reg_class)

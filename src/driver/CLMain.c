@@ -33,6 +33,30 @@
 #include "driver/Resources.h"
 #include "driver/cc-eabi-ppc-mw.h"
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+char data_00543238[] = "project";
+char data_00543240[] = "resolve";
+
+
+/* Globals (generated from the original's .bss) */
+char * DAT_0057d920;
+char * DAT_0057d924;
+char * DAT_0057d928;
+char data_0057d930[8];
+char input_name[32/sizeof(char)];
+char output_name[32/sizeof(char)];
+SInt32 unique_plugin_name_count;
+int data_005871bc;
+int data_005871c0;
+SInt32 data_005871c4;
+SInt32 data_005871c8;
+SInt32 data_005871d4;
+SInt32 plugin_request_count;
+char ** unique_plugin_names;
+struct ToolArgumentSet * file_argument_sets;
+struct PluginRequest * plugin_requests;
+struct ToolArgumentSet * tool_argument_sets;
 unsigned int __stdcall copy_global_value_to_address(unsigned int destinationAddress)
 {
     *(SInt32 *)destinationAddress = data_00541e44;

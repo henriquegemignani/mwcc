@@ -4,6 +4,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* Globals (generated from the original's .bss) */
+int data_0057d010[4/sizeof(int)];
+struct EnvironmentBlock data_0057d014;
+struct CFileRec * data_0058476c;
+struct CFileRec * data_00584770;
+struct EnvironmentBlock * data_00587170;
+char ** _Environ;
+
 #define CERROR_FILE "unknown.c"
 
 #pragma auto_inline off

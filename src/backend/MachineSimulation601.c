@@ -9,6 +9,18 @@
 #include "compiler/PCode.h"
 #include "compiler/PCodeAssembly.h"
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+SInt32 data_00582ff0;
+SInt32 data_00582ff4;
+SInt32 data_00582ff8;
+SInt32 data_00582ffc;
+FuncArg * data_00583000;
+SInt32 data_00583004;
+SInt32 data_00583008;
+SInt32 data_0058300c;
+SInt32 data_00583010;
+SInt32 data_00583014;
 /* Record used to index the seven-byte entries in DAT_00577661. */
 
 Boolean is_execution_unit_seven(int instruction)

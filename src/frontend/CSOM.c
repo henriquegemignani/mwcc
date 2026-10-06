@@ -1369,6 +1369,12 @@ void create_ancestor_object(SOMClassBuildState *info, TypeClass *cls)
 
 #include <stddef.h>
 
+/* Globals (generated from the original's .bss) */
+struct HashNameNode * data_00581c48;
+struct HashNameNode * space_name;
+struct HashNameNode * spaces_name;
+struct HashNameNode * csom_blank_name;
+
 void build_class_vtables_and_members(SOMClassBuildState *layout, TypeClass *cls)
 {
     ClassList *baseClass;

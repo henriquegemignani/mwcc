@@ -39,6 +39,11 @@
 
 #include "compiler/Types.h"
 
+/* Globals (generated from the original's .bss) */
+struct IROLinear * linear_range_start;
+IROLinear * linear_range_end;
+struct IRONode * move_expr_before_node;
+
 /* 0x551f40: "IroUtil.c" */
 
 struct IROLinear *IroUtil_GetLinearRangeStart(struct IROLinear *node)

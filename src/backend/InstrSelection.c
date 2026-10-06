@@ -44,6 +44,10 @@
 #include <stdlib.h>
 #include "compiler/ENode.h"
 
+/* Strings (generated from the original's .data) */
+char instrSelectionFileName[] = "InstrSelection.c";
+
+
 #define CE_ASSERT(c, s)                                                                                                \
     do {                                                                                                               \
         if (c)                                                                                                         \

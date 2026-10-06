@@ -14,6 +14,20 @@
 #include <setjmp.h>
 #include "compiler/win32.h"
 
+/* Globals (generated from the original's .bss) */
+char help_line[256/sizeof(char)];
+struct HelpColumn helpTextColumn;
+struct HelpColumn firstHelpColumn;
+struct HelpColumn third_help_column;
+jmp_buf plugin_request_jmp_buf;
+int * driverTool;
+void * help_output;
+int data_00587ce0;
+unsigned short help_width;
+unsigned char data_00587e23;
+char * data_00587eec;
+char * help_option_separator;
+
 void append_formatted_text(HelpColumn *buf, char *format, ...)
 {
     char text[1024];

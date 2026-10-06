@@ -1023,6 +1023,22 @@ void parse_ivars(TypeClass *classType, char checkExisting)
 
 #include <stddef.h>
 
+/* Strings (generated from the original's .data) */
+char cobjc_filename[] = "CObjC.c";
+unsigned char objc_category_prefix[] = "L_OBJC_CATEGORY_INSTANCE_METHODS_";
+unsigned char objc_category_method_list_prefix[] = "L_OBJC_CATEGORY_CLASS_METHODS_";
+UInt8 objc_class_method_list_prefix[] = "L_OBJC_CLASS_METHODS_";
+UInt8 objc_instance_method_list_prefix[] = "L_OBJC_INSTANCE_METHODS_";
+
+
+/* Globals (generated from the original's .bss) */
+struct ObjCDefinition * category_definitions;
+struct PrecTypeEntry * class_type_entries;
+struct Type * class_pointer_type;
+int objc_string_constant_count;
+struct Type * id_type;
+UInt8 data_00588507;
+
 void parse_category_methods_and_check_defined(TypeClass *theclass)
 {
     MethRec *method;

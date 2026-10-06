@@ -42,6 +42,20 @@
 #include "compiler/Registers.h"
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+struct RegisterValueRecord * register_values_by_opcode[466];
+struct RegisterValueState * register_value_state_array;
+struct RegisterValueState * fpr_value_states;
+struct RegisterValueState * gRegisterValueStates;
+struct RegisterValueState * register_value_states;
+struct ObjectIndexEntry * objectIndex;
+struct ObjectIndexEntry * object_indices;
+void * data_00582c38;
+SInt32 next_value_index;
+SInt32 value_index_threshold;
+struct Object * data_00582c44;
+unsigned int data_00582c48;
 /* 12-byte operand descriptor. */
 
 void ValueNumbering_PerformValueNumbering(int options)

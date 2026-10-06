@@ -43,6 +43,19 @@
 #include "compiler/Registers.h"
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+struct CodeMotionObjectNode * gCodeMotionAllocationList_005870fc;
+signed long data_005871a4;
+int gCodeMotionChanged;
+struct Loop * data_0058763c;
+struct CodeMotionEntryLink ** register_definition_heads;
+struct CodeMotionEntryLink ** register_use_entry_heads;
+struct CodeMotionEntryLink ** code_motion_register_definition_heads;
+struct CodeMotionEntryLink ** codeMotionUseEntryHeads;
+struct CodeMotionEntryLink ** data_00587f04;
+struct CodeMotionObjectNode * gCodeMotionObjectTree_005880ac;
+int gCodeMotionCounter_005880b8;
 #define CM_BIT(set, i) (((UInt32 *)(set))[(i) >> 5] & (1 << (i)))
 
 typedef struct CMOState CMOState;

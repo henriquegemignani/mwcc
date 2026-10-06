@@ -34,6 +34,16 @@
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
 #include "compiler/VectorArraysToRegs.h"
+
+/* Globals (generated from the original's .bss) */
+int constantPropagationChanged;
+struct PCodeInstruction ** unique_definitions;
+struct PCodeInstruction ** virtual_register_definitions;
+int gLoadDeletionChanged;
+struct CBlockData * data_00587c98;
+struct E * immediateLoadLiveness;
+int data_0058820c;
+int gConstantPropagationChanged;
 #define NULL 0
 #define LowMask(lo) ((lo).value.signed_value > 31 ? 0U : 0xffffffffU >> (lo).value.unsigned_value)
 #define HighMask(hi) ((int)(hi).value.unsigned_value + 1 > 31 ? 0U : 0xffffffffU >> ((hi).value.unsigned_value + 1U))

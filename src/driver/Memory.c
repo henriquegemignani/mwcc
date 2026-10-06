@@ -8,6 +8,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+/* Globals (generated from the original's .bss) */
+unsigned short memory_error;
 MemBuffer *Memory_GetSizeAddress(void *allocation)
 {
     MemBuffer *buffer = (MemBuffer *)allocation;

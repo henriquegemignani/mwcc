@@ -26,6 +26,17 @@
 #pragma auto_inline off
 #include <string.h>
 
+/* Strings (generated from the original's .data) */
+char data_0054beec[] = "CLProj.c";
+char this_not_null_string[] = "this != NULL";
+
+
+/* Globals (generated from the original's .bss) */
+OSSpec data_0057f018;
+char directory_search[268/sizeof(char)];
+char matching_entry_directory[259/sizeof(char)];
+char data_0057f36b[69/sizeof(char)];
+
 #pragma auto_inline reset
 
 #pragma auto_inline off

@@ -19,6 +19,12 @@
 
 #include <setjmp.h>
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+char data_005649c0[] = "...";
+char const_qualifier[] = " const";
+char unmangle_volatile_string[] = " volatile";
+
 #define false 0
 #define true 1
 void assign_object_register(Object *func, SInt16 register_number)

@@ -7,6 +7,16 @@
 #include "driver/cc-eabi-ppc.h"
 #include <string.h>
 
+/* Strings (generated from the original's .data) */
+unsigned char ppc_eabi_codegen_resource_name[] = "PPC EABI CodeGen";
+unsigned char ppc_eabi_preference_resource_name[] = "PPC EABI Project";
+unsigned char linkerPreferenceResourceName[] = "PPC EABI Linker";
+
+
+/* Globals (generated from the original's .bss) */
+SInt16 data_0057f6a8;
+struct CPrepCU compiler_plugin_cu;
+
 void fn_0042c0c0(void)
 {
     return;

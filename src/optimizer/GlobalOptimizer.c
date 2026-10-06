@@ -18,6 +18,13 @@
 #include "compiler/StrengthReduction.h"
 #include "compiler/ValueNumbering.h"
 
+/* Globals (generated from the original's .bss) */
+int gArrayToRegisterEnabled;
+SInt32 gValueNumberingChanged;
+SInt32 gStrengthReductionChanged;
+int gArrayToRegisterChanged;
+int gLoopTransformChanged;
+
 static void COptimizer_DumpStage(Object *function, const char *stage)
 {
     Object *obj = function;

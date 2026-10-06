@@ -39,6 +39,45 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Strings (generated from the original's .data) */
+char data_0055fbdc[] = "[0]";
+char data_0055fbe0[] = "[1]";
+char data_0055fbe4[] = "[2]";
+char nameHash4_string[] = "[3]";
+char nameHash5String[] = "[4]";
+char data_0055fbf0[] = "[5]";
+char data_0055fbf4[] = "[6]";
+char data_0055fbf8[] = "[7]";
+char data_0055fbfc[] = "[8]";
+char name_hash10_string[] = "[9]";
+char data_0055fc04[] = "[10]";
+char name12[] = "[11]";
+char data_0055fc14[] = "[12]";
+char data_0055fc1c[] = "[13]";
+char data_0055fc24[] = "[14]";
+char data_0055fc2c[] = "[15]";
+char vector_unsigned_name[] = "vector unsigned char";
+char data_0055fc4c[] = "vector unsigned short";
+char data_0055fc64[] = "vector unsigned int";
+char vector_signed_char_name[] = "vector signed char";
+char vector_signed_short_name[] = "vector signed short";
+char data_0055fca0[] = "vector signed int";
+char vector_bool_char_name[] = "vector bool char";
+char vector_bool_short_name[] = "vector bool short";
+char vector_bool_int_name[] = "vector bool int";
+char vector_float_name[] = "vector float";
+char vector_pixel_name[] = "vector pixel";
+char cmachine_filename[] = "CMachine.c";
+char float_format[] = "%g";
+
+
+/* Globals (generated from the original's .bss) */
+int maximumAlignment;
+int structLayoutOffset;
+short data_00580fa0;
+signed short bitfield_storage_size;
+int data_00580fa4;
+
 /* Declarations gathered from the merged files. */
 
 void initialize_hash_name_globals(void)

@@ -39,6 +39,17 @@
 #include <string.h>
 #include "compiler/ENode.h"
 
+/* Strings (generated from the original's .data) */
+char crlf[] = "\r\n";
+
+
+/* Globals (generated from the original's .bss) */
+struct _FILE * data_005811b0;
+int enode_tree_depth_index;
+UInt8 data_00581300;
+SInt32 current_statement_number;
+unsigned char data_00588513;
+
 void dump_eat_nodes(CException *p)
 {
     char buf[256];

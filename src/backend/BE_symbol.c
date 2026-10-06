@@ -36,6 +36,10 @@
 #include "compiler/TOC.h"
 #include "driver/Files.h"
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+struct BE_SymNode * be_symbol_list;
+struct BE_SymNode * symbol_tail;
 /* Declarations gathered from the merged files. */
 
 /* Back-end symbol records and their associated data. */

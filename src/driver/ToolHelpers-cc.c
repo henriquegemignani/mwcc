@@ -19,6 +19,19 @@
 #include "driver/ToolHelpers.h"
 #include <stdio.h>
 #include <setjmp.h>
+
+/* Globals (generated from the original's .bss) */
+struct CommandLineArguments * cmdline_environment;
+int num_panels;
+struct PanelEntry * data_00587cf0;
+int data_00587e04;
+int data_00587e08;
+int data_00587e0c;
+char data_00587e22;
+UInt8 data_00587e26;
+UInt8 data_00587e27;
+UInt8 data_00587e28;
+char data_00588528;
 static void emit_header(void *p)
 {
     HPrintF(p, "C language warning options:\n");

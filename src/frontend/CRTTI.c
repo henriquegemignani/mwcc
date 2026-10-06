@@ -44,6 +44,14 @@
 #include "compiler/ENode.h"
 #include "compiler/Types.h"
 #include <string.h>
+
+/* Strings (generated from the original's .data) */
+char std_type_info_name[] = "::std::type_info";
+
+
+/* Globals (generated from the original's .bss) */
+struct RTTIVTableOffsetNode * rtti_vtable_offset_list;
+struct RData * rtti_offset_table_head;
 ENode *CRTTI_ParseConstCast(void)
 {
     UInt32 pre;

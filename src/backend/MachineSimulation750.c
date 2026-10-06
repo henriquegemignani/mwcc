@@ -9,6 +9,37 @@
 #include "compiler/PCode.h"
 #include "compiler/PCodeAssembly.h"
 #include "compiler/Scheduler.h"
+
+/* Globals (generated from the original's .bss) */
+PoolEntry data_00582e70[9];
+struct PCodeInstruction * data_00582e78;
+SInt32 data_00582e7c;
+struct PCodeInstruction * data_00582e80;
+SInt32 data_00582e84;
+struct PCodeInstruction * DAT_00582e88;
+SInt32 data_00582e8c;
+struct PCodeInstruction * data_00582e90;
+SInt32 data_00582e94;
+struct PCodeInstruction * DAT_00582e98;
+SInt32 data_00582e9c;
+struct PCodeInstruction * DAT_00582ea0;
+SInt32 data_00582ea4;
+struct PCodeInstruction * DAT_00582ea8;
+SInt32 data_00582eac;
+struct PCodeInstruction * data_00582eb0;
+SInt32 data_00582eb4;
+struct PCodeInstruction * data_00582eb8;
+struct PCodeInstruction * data_00582ebc;
+int data_00582ec0;
+SInt32 pending_opt_args;
+UInt32 simulation_pipeline_index;
+UInt32 opt_arg_index;
+OptPair DAT_00582ed0[6];
+unsigned int DAT_00582ed8;
+unsigned int DAT_00582ee0;
+unsigned int DAT_00582ee8;
+unsigned int _DAT_00582ef0;
+unsigned int _DAT_00582ef8;
 int get_opcode_table_first_entry(PCodeInstruction *instruction)
 {
     return opcode_table_entries[instruction->opcode * 6];

@@ -36,6 +36,25 @@
 #include "compiler/ObjGen_PPC_EABI.h"
 #include "compiler/PCode.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+SInt32 def_count;
+struct IRODef * def_list;
+struct IRODef * global_def_tail;
+int data_00580624;
+struct IROUse * allocated_uses;
+struct IROUse * global_use_tail;
+struct BitVector * use_def_in;
+struct BitVector * used_defs_bitvector;
+SInt32 data_00580638;
+struct BitVector * data_0058711c;
+struct BitVector * data_00587174;
+struct VarRecord * var_records;
+struct IRONode * iro_flowgraph_head;
+struct BitVector * data_00587f70;
+unsigned int iroVarCount;
+struct IRONode ** iroNodesByIndex;
+struct BitVector * connected_defs_and_uses_bits;
 static void IROUseDef_SetBit(UInt32 bit, BitVector *bv);
 
 #define CE_ASSERT(c, s)                                                                                                \

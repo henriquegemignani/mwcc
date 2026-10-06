@@ -29,6 +29,10 @@
 #include "compiler/Switch.h"
 #include "compiler/BitVector.h"
 
+/* Globals (generated from the original's .bss) */
+struct IRONode * iroNodeTail;
+struct IRONode * data_00587fac;
+
 static void IRO_BitVectorSetBit(UInt32 bit, BitVector *bv)
 {
     if ((bit >> 5) < bv->size)

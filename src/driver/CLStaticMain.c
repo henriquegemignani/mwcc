@@ -13,6 +13,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <msl_internal.h>
+
+/* Globals (generated from the original's .bss) */
+int callback_count;
+SInt32 data_0057d21c;
+char *argv_buffer;
+char **argv;
+SInt32 exit_callback;
 #define EXIT_TABLE ((void (**)(void)) & data_0057d21c)
 #pragma exceptions off
 #pragma auto_inline off

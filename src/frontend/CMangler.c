@@ -40,6 +40,39 @@
 #include <stdio.h>
 
 #include "compiler/Objects.h"
+
+/* Strings (generated from the original's .data) */
+unsigned char covariant_function_name_prefix[] = "@@";
+char operator_new_name[] = "__nw";
+char delete_operator_name[] = "__dl";
+char plus_operator_code[] = "__pl";
+char minus_operator_name[] = "__mi";
+char operator_code_ml[] = "__ml";
+char operator_dv_name[] = "__dv";
+char md_operator_code[] = "__md";
+char operator_er_code[] = "__er";
+char data_00561cc0[] = "__ad";
+char operator_or_code[] = "__or";
+char co_operator_code[] = "__co";
+char operator_nt_code[] = "__nt";
+char lt_operator_name[] = "__lt";
+char gt_operator_name[] = "__gt";
+char operator_ls[] = "__ls";
+char operator_rs_code[] = "__rs";
+char eq_operator_name[] = "__eq";
+char operator_ne_code[] = "__ne";
+char operator_le_name[] = "__le";
+char ge_operator_code[] = "__ge";
+char data_00561d70[] = "__aa";
+char operator_name_code[] = "__oo";
+char operator_names[] = "__pp";
+char operator_name_mm[] = "__mm";
+char data_00561d90[] = "__cm";
+char operator_rm_code[] = "__rm";
+char operator_code_rf[] = "__rf";
+char operator_call_code[] = "__cl";
+char operator_vc_name[] = "__vc";
+
 /* Declarations gathered from the merged files. */
 
 /* 0x561a30, "CMangler.c" */

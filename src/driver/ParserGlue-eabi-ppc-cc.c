@@ -9,6 +9,15 @@
 #include "driver/StringUtils.h"
 #include "driver/Targets.h"
 #include "driver/ToolHelpers-cc.h"
+
+/* Strings (generated from the original's .data) */
+char data_00540b6c[] = "'-use_lmw_stmw on' or '-opt functions' only applies to big-endian machines";
+
+
+/* Globals (generated from the original's .bss) */
+char output_path;
+struct StorageHandle * directive_storage;
+Boolean data_0058851d;
 unsigned int fn_00405670(void)
 {
     data_00537aa2 = 1U;

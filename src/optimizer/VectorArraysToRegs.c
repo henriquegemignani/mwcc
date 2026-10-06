@@ -42,6 +42,10 @@
 #include "compiler/Registers.h"
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+int * load_index_entry_counts;
+int * block_entry_start;
 /* Removed unused two-operand PCodeInstruction view; VectorArraysToRegs_ReplaceArrayUsesWithVMR uses opcode, flags and operand count at these offsets. */
 /* Vector-array uses and the tables used by this pass. */
 

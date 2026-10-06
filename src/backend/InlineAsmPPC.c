@@ -61,6 +61,21 @@ typedef enum RegClass { RC_GPR = 0, RC_FPR = 1, RC_SPR = 2, RC_CRFIELD = 3, RC_C
 
 #include <stddef.h>
 
+/* Strings (generated from the original's .data) */
+char machine_keyword[] = "machine";
+char entry_keyword[] = "entry";
+char fralloc_keyword[] = "fralloc";
+char nofralloc_keyword[] = "nofralloc";
+char frfree_identifier[] = "frfree";
+char smclass_keyword[] = "smclass";
+
+
+/* Globals (generated from the original's .bss) */
+struct Float token_float;
+unsigned int data_00587128;
+char inlineAsmMode;
+UInt8 inlineAsmPPCEnabled;
+
 Statement *InlineAsmPPC_CopyStatement(Statement *stmt)
 {
     Statement *result;

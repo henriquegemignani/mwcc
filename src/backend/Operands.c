@@ -44,6 +44,15 @@
 #include "compiler/ENode.h"
 #include "compiler/Types.h"
 
+/* Globals (generated from the original's .bss) */
+struct TOCReferenceEntry * toc_references;
+struct ObjectList * float_object_list;
+struct ObjectList * data_00587660;
+SInt32 data_00588200;
+struct MemberPointerConstant * member_pointer_constants;
+unsigned char data_005883f0[10/sizeof(unsigned char)];
+UInt8 data_00588508;
+
 enum { kRegOne = 1 };
 
 #define Operands_NewReg(reg, avoid) (((reg) != 0 && (reg) != (avoid)) ? (reg) : gUsedVirtualRegistersGPR++)

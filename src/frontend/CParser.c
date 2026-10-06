@@ -61,6 +61,32 @@
 
 #include "compiler/CDecl.h"
 
+/* Globals (generated from the original's .bss) */
+int data_00580dc0;
+struct ClassTypeLink * class_type_links;
+struct CParseRec * class_parse_recs;
+struct CParseCacheNode * single_expr_functions;
+struct Object * DAT_0058769c;
+struct Object * DAT_005876c0;
+struct Object * DAT_00587ed0;
+struct Object * typeid_func;
+struct Object * DAT_00587f80;
+struct Object * DAT_00588060;
+struct PendingObjectClass * pending_object_classes;
+struct Object * dynamic_cast_object;
+struct Object * DAT_00588260;
+struct Object * som_ref_node_rtfunc;
+struct Object * som_ref_node_runtime_object;
+struct Object * DAT_00588278;
+struct Object * DAT_005882a4;
+unsigned int _DAT_0058843e;
+unsigned char DAT_0058844a;
+unsigned short _DAT_0058844c;
+unsigned int _DAT_0058847e;
+unsigned char DAT_0058848a;
+unsigned short _DAT_0058848c;
+unsigned char DAT_0058852e;
+
 void parse_namespace_declaration(void *declarationData)
 {
     DeclInfo *declaration = declarationData;

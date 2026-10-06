@@ -37,6 +37,20 @@
 #include "compiler/Registers.h"
 #include "compiler/StrengthReduction.h"
 #include "compiler/Switch.h"
+
+/* Globals (generated from the original's .bss) */
+int * add_propagation_entry_counts;
+struct CodeMotionEntry * code_motion_entries;
+struct AddPropagationEntry * add_propagation_entries;
+struct CodeMotionEntry * cm_entries;
+struct CodeBits * addPropagationBlockBits;
+int data_00587e38;
+SInt32 add_propagation_entry_count;
+SInt32 codeMotionEntryCount;
+struct CodeMotionEntryLink ** code_motion_register_use_heads;
+SInt32 gAddPropagationChanged;
+SInt32 addPropagationChanged;
+int * add_propagation_block_bit_indices;
 static int COpt_AllLinked(SInt32 j, CodeMotionEntryLink *p)
 {
     for (; p != NULL; p = p->next)

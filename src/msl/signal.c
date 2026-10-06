@@ -2,6 +2,9 @@
 #include "msl/signal.h"
 #include "msl/critical_regions_win32.h"
 #include "msl/startup_win32.h"
+
+/* Globals (generated from the original's .bss) */
+unsigned int data_0057d2a4[28/sizeof(unsigned int)];
 unsigned int exchange_indexed_value(int index, unsigned int value)
 {
     unsigned int old;

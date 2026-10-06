@@ -58,6 +58,18 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdlib.h>
+
+/* Strings (generated from the original's .data) */
+char data_0054bf38[] = " search path";
+
+
+/* Globals (generated from the original's .bss) */
+SInt16 data_0057f3b0;
+short diagnostic_count;
+short diagnostic_limit_count;
+char data_00587326;
+char diagnosticReported;
+OSSpec DAT_00587328;
 #define CERROR_FILE "unknown.c"
 
 int __stdcall CLFileOps_FindExecutable(char *name, void *param2)

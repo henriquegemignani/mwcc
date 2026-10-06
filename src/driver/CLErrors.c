@@ -16,6 +16,10 @@
 #define va_start(ap, last) ((ap) = (char *)&(last) + (((char *)(&(last) + 1) - (char *)&(last) + 3) / 4 * 4))
 
 #include <stdio.h>
+
+/* Globals (generated from the original's .bss) */
+char DAT_0057d5f8[256/sizeof(char)];
+char diagnostic_message_buffer[256/sizeof(char)];
 char *fn_004087d0(unsigned int errorCode, char *buffer)
 {
     CLIO_GetResourceCString(buffer, 12000U, errorCode);

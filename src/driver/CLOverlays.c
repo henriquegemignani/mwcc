@@ -10,6 +10,11 @@
 #include <string.h>
 #include <time.h>
 
+/* Strings (generated from the original's .data) */
+unsigned char overlay_group_string[] = "overlay group";
+unsigned char overlay_string[] = "overlay";
+
+
 #define OS_ASSERT(line, cond)                                                                                          \
     if (!(cond))                                                                                                       \
     CLIO_ReportAssertionFailure(#cond, "CLOverlays.c", line)

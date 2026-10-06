@@ -47,6 +47,30 @@
 #include <stdio.h>
 #include "compiler/ENode.h"
 
+/* Strings (generated from the original's .data) */
+char dtor_type_name[] = "dtor";
+char size_type_name[] = "size";
+
+
+/* Globals (generated from the original's .bss) */
+SInt16 precompiled_file;
+GList precompiled_buffer;
+struct CPrecHeader * prec_header;
+struct PendingBuffer * pending_buffers;
+SInt16 data_00581c26;
+UInt8 data_00581c30;
+struct TemporaryObject * temporary_object_list;
+struct Statement * data_00581c36;
+struct CException * currentDobjstack;
+struct CException * current_dobjstack;
+struct Object * DAT_00587654;
+struct Object * throw_func;
+struct ECacheNode * cached_objects;
+UInt32 statement_sourceoffset;
+Type exception_temp_object_type;
+SInt8 data_005884fa;
+UInt8 exception_cleanup_registered;
+
 #define CE_ASSERT(c, s)                                                                                                \
     do {                                                                                                               \
         if (c)                                                                                                         \

@@ -15,6 +15,34 @@
 
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+struct InstructionTimingSlot instruction_timing_slots[8];
+int opcodeValues[4/sizeof(int)];
+struct PCodeInstruction * data_00582d20;
+int data_00582d24;
+struct PCodeInstruction * data_00582d28;
+int data_00582d2c;
+struct PCodeInstruction * data_00582d30;
+int data_00582d34;
+struct PCodeInstruction * data_00582d38;
+int data_00582d3c;
+struct PCodeInstruction * queuedInstruction;
+int data_00582d44;
+struct PCodeInstruction * data_00582d48;
+int data_00582d4c;
+struct PCodeInstruction * data_00582d50;
+int data_00582d54;
+int DAT_00582d58;
+int DAT_00582d5c;
+unsigned int data_00582d60;
+unsigned int data_00582d64;
+InstructionCompletionEntry instruction_completion_entries[5];
+unsigned int data_00582d6c[4/sizeof(unsigned int)];
+SInt32 data_00582d70;
+SInt32 data_00582d78;
+SInt32 data_00582d80;
+SInt32 data_00582d88;
+
 int get_instruction_opcode_table_value(PCodeInstruction *instruction)
 {
     return instruction_opcode_table[instruction->opcode * 6];

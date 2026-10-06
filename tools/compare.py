@@ -241,11 +241,22 @@ def resolve_function(symbols, sections, symbol_name, target_address, addresses, 
                  and not other['name'].startswith('.')),
                 default=len(literal['data']),
             )
-            payload = bytearray(literal["data"][dest["value"] : literal_end])
+            origin = dest["value"]
+            if dest["storage"] == 3 and kind == 6 and origin + addend >= literal_end:
+                # (a section symbol whose addend lies past the next symbol, such as a source's own data defined before
+                # a compiler constant: the literal is the one the addend selects)
+                origin += addend
+                literal_end = min(
+                    (other['value'] for other in symbols.values()
+                     if other['section'] == dest['section'] and other['value'] > origin
+                     and not other['name'].startswith('.')),
+                    default=len(literal['data']),
+                )
+            payload = bytearray(literal["data"][origin : literal_end])
             for table_offset, table_index, table_kind in literal['relocs']:
-                if table_offset + 4 <= dest['value'] or table_offset >= literal_end:
+                if table_offset + 4 <= origin or table_offset >= literal_end:
                     continue
-                position = table_offset - dest['value']
+                position = table_offset - origin
                 if position < 0 or position + 4 > len(payload) or table_kind not in (6, 7):
                     payload = bytearray()
                     break
@@ -268,8 +279,8 @@ def resolve_function(symbols, sections, symbol_name, target_address, addresses, 
                 struct.pack_into('<I', payload, position, resolved & 0xffffffff)
             # A literal ends at the next COFF symbol, which in a merged translation unit can lie past the
             # last table entry: zero bytes after the last relocated entry are alignment padding.
-            last_entry = max((o + 4 - dest['value'] for o, _, _ in literal['relocs']
-                              if dest['value'] <= o < literal_end), default=None)
+            last_entry = max((o + 4 - origin for o, _, _ in literal['relocs']
+                              if origin <= o < literal_end), default=None)
             if payload and last_entry is not None and len(payload) > last_entry and not any(payload[last_entry:]):
                 payload = payload[:last_entry]
             # Verify the entire literal up to the next COFF data symbol, not
@@ -277,7 +288,7 @@ def resolve_function(symbols, sections, symbol_name, target_address, addresses, 
             # in this range must resolve and occur together in the original.
             matches = locate(bytes(payload)) if payload else []
             if len(matches) == 1:
-                address = matches[0]
+                address = matches[0] - (origin - dest["value"])
             else:
                 # COFF section references can point into a merged string pool.
                 start = dest["value"] + addend

@@ -22,6 +22,19 @@
 
 /* A browser table entry associates a value with a name. */
 #include <stdlib.h>
+
+/* Strings (generated from the original's .data) */
+unsigned char browse_file_table_string[] = "browse file table";
+unsigned char data_0054d9c4[] = "allocate";
+
+
+/* Globals (generated from the original's .bss) */
+struct BrowserCacheEntry * browser_cache_entries;
+struct BrowserCacheEntry * browser_cache_free_list;
+unsigned int cache_free_size;
+jmp_buf driver_jmp_buf;
+MemBuffer data_00587570;
+char data_005880e0[260/sizeof(char)];
 int fn_004286d0(DropinFileRecord *input, unsigned int processingMode, unsigned int processingFlags)
 {
     MemBuffer lookupResult;

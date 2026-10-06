@@ -39,6 +39,18 @@
 #include "driver/Memory.h"
 #include <string.h>
 
+/* Strings (generated from the original's .data) */
+char cbrowse_filename[] = "CBrowse.c";
+
+
+/* Globals (generated from the original's .bss) */
+GList browse_member_list;
+BrowseObjectBuffer browse_function_buffer;
+SInt32 nextFunctionId;
+GList data_00583548;
+struct HashNameNode ** data_00587f88;
+UInt8 data_005884f5;
+
 /* Declarations gathered from the merged files. */
 
 #define BROWSE_ASSERT(c, s)                                                                                            \

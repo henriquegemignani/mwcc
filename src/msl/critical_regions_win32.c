@@ -1,5 +1,8 @@
 
 #include "msl/critical_regions_win32.h"
+
+/* Globals (generated from the original's .bss) */
+struct _RTL_CRITICAL_SECTION DAT_0057d228[5];
 void initialize_critical_sections(void)
 
 {int iVar1;

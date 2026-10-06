@@ -44,6 +44,20 @@
 #include "compiler/Types.h"
 
 #include <setjmp.h>
+
+/* Globals (generated from the original's .bss) */
+Boolean optimizer_changed;
+struct COptBlock * current_opt_block;
+struct ENode * current_cse_expr;
+SInt16 opt_block_bits_size;
+struct COptCSE * cse_list;
+short data_005812fc;
+char data_005812fe;
+char data_005812ff;
+short data_00581302;
+struct ENode * last_node;
+int DAT_00581308;
+struct COptBlock * opt_blocks;
 /* Declarations gathered from the merged files. */
 
 void set_label_stmt_flag(ENode *a)

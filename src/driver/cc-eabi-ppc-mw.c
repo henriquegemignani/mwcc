@@ -2,6 +2,11 @@
 #include "driver/cc-eabi-ppc-mw.h"
 #include "compiler/InlineAsmPPC.h"
 #include "driver/ClientGlue.h"
+
+/* Strings (generated from the original's .data) */
+unsigned char data_005437e8[] = "mwldnr2";
+unsigned char data_005437f0[] = "Linker Tool Stub";
+
 #pragma scheduling off
 int __stdcall get_name_and_length(char **name, int *length)
 {

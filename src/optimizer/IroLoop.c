@@ -45,6 +45,21 @@
 
 #include "compiler/ENode.h"
 
+/* Globals (generated from the original's .bss) */
+struct IROLoopInd * induction_variables;
+struct IROExpr * iro_loop_roots;
+struct BitVector * data_0058064c;
+unsigned char data_0058066a;
+signed int data_00580674;
+struct IRONode * loop_header;
+struct IROLinear * loop_candidate_last;
+struct IROElmList * iro_elm_list_head;
+struct LoopCandidate * loop_candidates;
+struct BitVector * data_005876bc;
+struct IROElmList * elm_list_tail;
+struct IRONode * data_00587c68;
+UInt8 data_0058851c;
+
 #define GMARKED(id)                                                                                                    \
     (((id) >> 5) < IRO_LoopScratchVector_005880dc->size &&                                                             \
      (IRO_LoopScratchVector_005880dc->bits[(id) >> 5] & (1 << (id))) != 0)

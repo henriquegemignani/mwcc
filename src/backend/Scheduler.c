@@ -35,6 +35,42 @@
 #include "compiler/Registers.h"
 #include "compiler/Switch.h"
 
+/* Globals (generated from the original's .bss) */
+struct DependencyEntry ** data_00581b00;
+struct DependencyEntry ** gpr_owner_lists;
+struct DependencyEntry ** data_00581b08;
+struct DependencyEntry ** fpr_owner_lists;
+struct DependencyEntry ** virtual_register_owner_lists;
+struct DependencyEntry ** register_owner_lists;
+struct DependencyEntry * data_00581b18[3];
+int DAT_00581b1c;
+int DAT_00581b20;
+struct DependencyEntry * data_00581b24[3];
+int DAT_00581b28;
+int DAT_00581b2c;
+struct DependencyEntry * data_00581b30[8];
+int DAT_00581b34;
+int DAT_00581b38;
+int DAT_00581b3c;
+int DAT_00581b40;
+int DAT_00581b44;
+int DAT_00581b48;
+int DAT_00581b4c;
+struct DependencyEntry * data_00581b50[8];
+int DAT_00581b54;
+int DAT_00581b58;
+int DAT_00581b5c;
+int DAT_00581b60;
+int DAT_00581b64;
+int DAT_00581b68;
+int DAT_00581b6c;
+struct DependencyEntry * memory_dependency_list;
+struct DependencyEntry * dependency_entry_list;
+struct SchedEntry * sched_entry_list;
+void * data_00581b7c;
+struct Checker * data_00581b80;
+UInt16 max_height;
+
 int Scheduler_ReturnZero(PCodeInstruction *list, PCodeInstruction *ref, char c)
 {
     SInt32 refid;

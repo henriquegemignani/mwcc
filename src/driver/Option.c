@@ -14,6 +14,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Globals (generated from the original's .bss) */
+struct OptionList * option_lists[128/sizeof(struct OptionList *)];
+OptionList optionList;
+int data_0057f43c;
+struct Option ** data_0057f440;
+char option_parameter_text[4096/sizeof(char)];
+char option_name[1024/sizeof(char)];
+int data_00587594;
+struct PtrList data_005876fc[12/sizeof(struct PtrList)];
+char data_00587ca0[64/sizeof(char)];
+int data_00587e10;
+char data_00587e2a;
+int option_list_count;
+int option_count;
+int option_capacity;
+
 #define oStack data_00586d20
 #define oStackPtr data_00587594
 

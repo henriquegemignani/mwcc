@@ -2369,6 +2369,16 @@ int initialize_typed_data(InitializerData *data, CInit *init, Type *type, UInt32
 
 #include <string.h>
 
+/* Globals (generated from the original's .bss) */
+struct CInit_StrNode * string_cache;
+struct NameEntry * pooled_strings;
+struct NameEntry * pooled_wstrings;
+struct InitListItem * tentative_init_list;
+struct ENodeList * data_00581ba0;
+UInt8 data_00581ba4;
+struct CInitSave * cinit_state;
+struct Object * destructor_registration_func;
+
 void initialize_class_initializer_data(InitializerData *dst, CInit *op, Type *type, UInt32 qual, int flag)
 {
     ObjMemberVar *member;

@@ -31,6 +31,14 @@
 #include "compiler/ObjGen_PPC_EABI.h"
 #include "compiler/PCode.h"
 #include "compiler/Switch.h"
+
+/* Strings (generated from the original's .data) */
+char chaining_goto_message[] = "Chaining goto at %d\n";
+
+
+/* Globals (generated from the original's .bss) */
+struct ERangeVar * range_vars;
+struct ERangeVar * first_range_var;
 void IroJump_ConvertCInt64ToType(CInt64 *value, Type *type)
 {
     if (Type_IsUnsigned(type)) {

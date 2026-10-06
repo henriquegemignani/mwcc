@@ -53,6 +53,9 @@
 
 #include <stdio.h>
 
+/* Globals (generated from the original's .bss) */
+Boolean data_00588500;
+
 Object *TOC_CreateSinitObject(void)
 {
     UInt8 buf[256];

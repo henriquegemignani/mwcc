@@ -60,6 +60,63 @@
 
 #include <setjmp.h>
 #include <stddef.h>
+
+/* Globals (generated from the original's .bss) */
+struct CPrepRec data_0057f6c8[640/sizeof(struct CPrepRec)];
+SInt16 if_depth;
+struct PFile * data_0057f94a[32];
+struct PrepNameCacheEntry * DAT_0057f9ca;
+UInt32 next_scaled_ticks;
+UInt8 data_0057f9d2;
+UInt8 data_0057f9d3;
+SInt32 data_0057f9d4;
+SInt32 text_offset;
+UInt8 DAT_0057f9dc;
+UInt8 data_0057f9dd;
+UInt8 DAT_0057f9de;
+struct CPrep_0043afc0_Entry saved_structalignments[768/sizeof(struct CPrep_0043afc0_Entry)];
+SInt16 data_0057fce0;
+struct PragmaNode * pragma_list;
+struct IROOptNode * saved_options;
+struct COpts * data_0057fcea;
+UInt8 DAT_0057fcee;
+GList macro_text;
+struct StorageHandle * buffered_token_storage;
+struct BufferedToken * buffered_tokens;
+SInt32 buffered_token_capacity;
+SInt32 data_0057fd0c;
+unsigned char file_cannot_opened_name[64/sizeof(unsigned char)];
+unsigned int total_heap_size;
+struct BufferedToken lastBufferedToken;
+short DAT_0057fd6c;
+MacroStack macro_stack[1792/sizeof(MacroStack)];
+UInt8 DAT_00586fd0[256];
+UInt8 f87_enabled;
+UInt8 data_0058702f;
+SInt32 string_literal_buffer_size;
+char * lookahead_position;
+UInt8 * currentTextPosition;
+PFile * DAT_005875f8;
+struct BufferedToken * buffered_token_buffer_end;
+struct BufferedToken * bufferedTokenPosition;
+int DAT_00587ef0;
+UInt8 * token_start;
+char * PTR_00587fb0;
+struct PFile * currentPFile;
+UInt8 * textend;
+struct StorageHandle * string_literal_storage;
+char * macro_text_start;
+int remainingBufferedTokenCount;
+SInt16 macro_expansion_depth;
+short current_file_index;
+SInt16 data_00588470;
+char template_recordbrowseinfo;
+UInt8 DAT_0058850f;
+UInt8 data_00588515;
+UInt8 concatenating_string_tokens;
+unsigned char data_00588524;
+UInt8 data_0058852a;
+UInt8 data_00588531;
 /* Declarations gathered from the merged files. */
 
 typedef void (*Callback)(BufferedToken *);

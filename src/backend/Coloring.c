@@ -42,6 +42,14 @@
 #include "compiler/StackFrameEABI.h"
 #include "compiler/Switch.h"
 
+/* Globals (generated from the original's .bss) */
+short gColoringRegisterCount;
+SInt32 gVirtualRegistersActive;
+struct InterferenceNode ** gInterferenceGraph;
+short gUsedVirtualRegistersFPR;
+SInt16 gUsedVirtualRegistersGPR;
+SInt16 gUsedVirtualRegistersVR;
+
 static void Coloring_RunClass(Object *function, int reg_class, int register_count, int (*available_registers)(void),
                               void (*setup_class)(void))
 {

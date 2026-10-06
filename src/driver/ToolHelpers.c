@@ -22,6 +22,17 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
+
+/* Globals (generated from the original's .bss) */
+PtrList data_00587688[1];
+short data_00587ce6;
+int lookup_value_count;
+char ** lookup_names;
+unsigned char data_00587cfc[4/sizeof(unsigned char)];
+unsigned char data_00587d00[4/sizeof(unsigned char)];
+Boolean data_00587e1e;
+char data_00587e1f;
+PtrList data_00588044;
 #define B3(x) (((x) & 0xff000000) >> 24)
 #define B2(x) (((x) & 0xff0000) >> 16)
 #define B1(x) (((x) & 0xff00) >> 8)

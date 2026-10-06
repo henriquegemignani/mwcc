@@ -42,6 +42,26 @@
 
 #include "compiler/ENode.h"
 
+/* Globals (generated from the original's .bss) */
+CInt64 data_005834f8;
+unsigned int expression_count;
+unsigned int data_005870f8;
+int data_005871b8;
+unsigned int DAT_00587630;
+struct IROExpr * expr_tail;
+struct IROExpr * expr_list;
+int DAT_00587e58;
+SInt32 data_00587ef4;
+struct BitVector * data_00588018;
+SInt32 DAT_005880a4;
+struct BitVector * IRO_LoopScratchVector_005880dc;
+ENode * data_005881ec;
+struct BitVector * availableExpressions;
+BitVector * killed_exprs;
+struct BitVector * noregister_bitvector;
+char nested_bitwise_expressions_rewritten;
+UInt8 nested_bitwise_type;
+
 /* Declarations gathered from the merged files. */
 
 static void IRO_BitVectorSet(UInt32 bit, BitVector *bv)
