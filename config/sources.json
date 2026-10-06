@@ -586,6 +586,17 @@
       "src/backend"
     ]
   },
+  "src/data/raw_data.c": {
+    "compiler": "pro53",
+    "flags": [
+      "-O4,p",
+      "-sym",
+      "on",
+      "-Cpp_exceptions",
+      "off"
+    ],
+    "status": "NonMatching"
+  },
   "src/driver/CLAccessPaths.c": {
     "compiler": "pro53",
     "flags": [
