@@ -78,27 +78,58 @@ output section (`<name> section layout`, columns `Starting address / Size / Virt
 per symbol with an alignment column and the owning object), then `Memory map:`, `Linker generated symbols:` and, with
 `-mapunused`, `UNUSED` rows. The format strings are at file offsets 0x95a1c to 0x95b98 and 0x990e4 to 0x99190.
 
-## The oracle
+## The oracle and the replica
 
-The real linker runs on this machine, so it can be the test oracle: `python tools/linker_oracle.py
-build/compilers/GC/2.7 OUT --runtime <dir with the MSL runtime .o files>` builds two tiny objects with 2.7's
-`mwcceppc.exe`, links them with the runtime objects, and keeps `a.elf` and `a.map` (the first link, with the default
-layout, puts `.text` at `0x10000`, file offset `0x120`; the output ELF was 2496 bytes).
+The real linker runs on this machine, so it is the test oracle. `tools/mwld.py` is a replica of a link with no linker
+command file, and `tools/linker_oracle.py LINKER_DIR OUT --runtime DIR` links nine small programs with both and
+compares the ELF files (`tools/elfdiff.py`) and the link maps. All nine are byte-identical, both ELF and map: dead
+code, two units, `-sdata 0` and `-sdata 64` data, per-symbol alignment, floats and switch tables, pointer data, C++
+with exceptions and RTTI, and an archive made by the real linker's `-library`. `tools/elf.py` reads the objects.
 
-Findings from it:
+What the real linker does, as found by those links:
 
-* With no LCF, `__init_cpp_exceptions` and `__fini_cpp_exceptions` must resolve (through the MSL runtime objects, which in
-  turn need `__register_fragment` and `__unregister_fragment`), even for a program that uses neither.
-* Objects without the compiler's floating-point comment data draw "Floating point settings of project file ... does not
-  match project settings" warnings; the linker reads the `.comment` section of each object.
+* **Dead stripping is by symbol.** An input section is cut into one atom per sized symbol; atoms nothing refers to are
+  dropped and the rest are packed, each at its own alignment. That alignment is in the object's `.comment` section
+  (a 44-byte header, then 8 bytes per symbol: alignment, two flag bytes, padding), not in the ELF. A section with a
+  symbol whose second flag byte is `0x10` (the compiler's `...data.0`) is kept whole. `.ctors` and `.dtors` atoms
+  are roots, as are the entry and the runtime's `__init_cpp_exceptions_reference` and its two siblings; a weak
+  definition another object overrides loses its atom. An `extabindex` entry lives when the function it describes does
+  and keeps its `extab`.
+* **Layout.** `.text` starts at 0x10000; the output sections go in the order `.compress.init .init .compress.text
+  .text .compress.fini .fini .rodata .ctors .dtors extab extabindex .BINARY .data .got .sdata .sbss .sdata2 .sbss2
+  .PPC.EMB.sdata0 .PPC.EMB.sbss0 .bss`, each at its alignment (the largest of its inputs' `sh_addralign`, and its size
+  is rounded up to 4), an empty one at the running address. An input section starts at its own `sh_addralign` (the map
+  shows a `*fill*` row). The file offsets are the running position; a `PROGBITS` section after a `NOBITS` one does not
+  keep the address-to-offset difference.
+* **Linker-made pieces.** `.ctors$00` (`_ctors`) and `.ctors$99` (`_ctors$99`, 4 zero bytes), likewise `.dtors`; the
+  suffixed input sections between them in name order, an unsuffixed `.ctors` after the suffixed. `extabindex` ends with
+  32 bytes, `_eti_init_info`: the table's start and end, the first function's address and the covered code's length,
+  then 16 zero bytes. `_SDA_BASE_` and `_SDA2_BASE_` are the start of `.sdata` and `.sdata2` plus 0x8000;
+  `_stack_addr` is 0x3dfff0 and the heap is below the stack, both fixed; `_nbfunctions` counts the kept functions.
+* **The ELF.** One `PT_LOAD` per non-empty section, `e_flags` 0x80000000, entry at the symbol. The symbol table is, for
+  each object that has a kept section: its `FILE` symbol, the section symbols of what was kept (the `extabindex` one
+  has value 0), the kept locals; then the four section symbols of the linker's own pieces, all the globals in object
+  order, and `_ctors`, `_ctors$99`, `_dtors`, `_dtors$99`, `_eti_init_info`. `st_other` is cleared. The relocations of
+  the objects that have a `.mwcats.text` are kept, sorted by address, with the address and symbol index of the output
+  (`.rela.text`, `.relaextabindex`, `.rela.data`...); `.mwcats.text` itself is rebuilt for the kept functions.
+  Sections: the loadable ones, `.rela*`, `.mwcats.text`, `.symtab`, `.shstrtab`, `.strtab` in the file in the order
+  `.shstrtab`, `.strtab`, `.symtab`, relocations, `.mwcats.text`, with the section header table at the next multiple
+  of 16.
+* **The map.** The format of `tools/mwld.py`'s `write_map`; the quirks are that a section's size is the input
+  section's size before stripping, that a `*fill*` row shows the address after the fill, that the first `extabindex`
+  listing is empty and the second has only symbol rows with the file offset of the end of the section, and that the
+  `_f_X_rom` address is aligned for the input sections there were even if all were stripped.
 
-## Plan
+What it does not know (the replica stops, or is untested): a linker command file, `-opt_partial` and the other partial
+links, `-sym` and DWARF merging, `-romaddr`, overlays, `-mapunused`/`-listclosure`, multiply-defined and other error
+messages (it prints only the first undefined symbol), a library search (`-l`, `MWLibraries`), objects whose `.comment`
+version is not 0x0b (1.3.2's objects link differently: the `.ctors` go to `.rodata` with a warning, and the retained
+relocations differ), and which objects have their relocations kept (the rule above fits every test; the real one may
+be the compiler version). The one linker in the tests is the project's 2.7 one.
 
-1. Read and diff (not yet written): a reader for the linker's input (ELF32 BE relocatable objects, `.a` archives with
-   the `!<arch>` format, `.comment` records) and an ELF diff tool that explains where two outputs differ.
-2. Replicate the no-LCF default layout, symbol resolution, relocations (`R_PPC_*`, `R_PPC_EMB_SDA21`, `R_PPC_ADDR16_*`)
-   and the map file, checked byte for byte against the oracle on the tiny programs, then on the project's split objects
-   (the units in `build/GC_2_7/obj`).
-3. LCF parsing, `FORCEACTIVE` dead-stripping, `.ctors`/`.dtors`, exception tables (`extab`/`extabindex`), DWARF merging.
-4. Decide, with the findings above, between a matching decompilation (in this repo's style, with `src/linker/`) and a
-   behavioral rewrite; the string table gives the file names and function boundaries for the former.
+## Next
+
+1. Run it on a project: the split objects of an actual game, checked against the real link.
+2. The linker command file, which every project uses, and `-opt_partial`.
+3. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
+   string table gives the file names and function boundaries for the former.
