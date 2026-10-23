@@ -29,14 +29,17 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
         }) {
             let sym = obj.sym(s);
             let owner = if atom.forced { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
-            items.push((atom.out_offset + sym.value - atom.start, sym.size > 0, s, owner));
+            // (the file offset of a symbol without size inside an atom is where the atom ends)
+            let inside = sym.size == 0 && sym.value > atom.start;
+            items.push((atom.out_offset + sym.value - atom.start, sym.size > 0, s, owner,
+                        inside.then_some(atom.out_offset + atom.size)));
         }
     }
     items.sort_by_key(|i| (i.0, i.1, i.2));
-    items.iter().map(|(off, _, s, owner)| {
+    items.iter().map(|(off, _, s, owner, end)| {
         let (off, s) = (*off, *s);
         let sym = obj.sym(s);
-        let fo = file_off.unwrap_or(lay.map_off[i] + off);
+        let fo = file_off.unwrap_or(lay.map_off[i] + end.unwrap_or(off));
         if sym.size == 0 {
             format!("  {off:08x} {:06x} {:08x} {fo:08x}    {} (entry of {}) \t{}\n", 0, lay.addr[i] + off, sym.name,
                     owner, obj.label())

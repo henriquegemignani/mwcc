@@ -17,6 +17,10 @@ const LINKER_SYMBOLS: [&str; 15] = [
     "_SDA_BASE_", "_SDA2_BASE_", "_ABS_SDA_BASE_", "_ABS_SDA2_BASE_", "_stack_addr", "_stack_end", "_heap_addr",
     "_heap_end", "_nbfunctions", "SIZEOF_HEADERS", "_eti_init_info", "_ctors", "_ctors$99", "_dtors", "_dtors$99"];
 
+fn sized(s: &Symbol) -> bool {
+    (s.typ == 1 || s.typ == 2) && s.size > 0
+}
+
 pub fn align(value: u32, to: u32) -> u32 {
     if to > 1 { value.wrapping_add(to - 1) & !(to - 1) } else { value }
 }
@@ -307,7 +311,11 @@ impl Link {
                 for a in ids {
                     let atom = &self.atoms[a];
                     let section = &self.objs[o].elf.sections[atom.sec].name;
-                    if (atom.forced || matches!(output_name(section), Some(".ctors") | Some(".dtors")))
+                    // (an active section stays whole when it is a constructor or destructor hook or has no sized symbol;
+                    // active data with sized symbols is dropped like any other)
+                    let hook = section.starts_with(".ctors") || section.starts_with(".dtors");
+                    if (atom.forced && atom.size > 0 && (hook || !atom.symbols.iter().any(|&s| sized(self.objs[o].sym(s))))
+                        || matches!(output_name(section), Some(".ctors") | Some(".dtors")))
                         && !atom.symbols.iter().any(|s| self.objs[o].lost.contains(s)) {
                         mark(&mut self.atoms, &mut work, a);
                     }

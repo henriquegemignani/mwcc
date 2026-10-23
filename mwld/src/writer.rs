@@ -116,6 +116,9 @@ fn apply_relocs(link: &Link, lay: &Layout, data: &mut [Vec<u8>]) -> R<()> {
                                 _ => return Err(format!("R_PPC_EMB_SDA21 to '{}' outside the small data sections",
                                                         link.objs[atom.obj].sym(r.sym).name)),
                             };
+                            // (the compiler may point the relocation at the displacement, 2 bytes into the instruction)
+                            let pos = pos - (r.offset & 3) as usize;
+                            let word = be32(buf, pos);
                             put32(buf, pos, (word & 0xFFE00000) | (reg << 16) | (value.wrapping_sub(base) & 0xFFFF));
                         }
                         k => return Err(format!("unsupported relocation type {k}")),
