@@ -136,13 +136,12 @@ What the real linker does, as found by those links:
 Real objects. `tools/linker_oracle.py` only builds small programs; the Echoes objects (1062 of them, the MSL, math and
 engine code the game was split into) were also linked: from a random function, the objects its undefined symbols need
 (the two runtime objects and a stub for `__register_fragment` and `__unregister_fragment` added, `-nostdlib`), by both
-linkers. Of 262 such links, 246 are identical, ELF and map. Four differ because the entry is a data symbol (an
-unrealistic case, laid out differently by the real linker). Nine differ only in the map: an unsized global such as
-`_savegpr_N` is listed, and its file offset in the map is the real linker's header size computed with one or two more
-sections than are kept, which has not been derived. Three differ in the ELF and were not looked into: a section symbol
-the real linker leaves out (`salCalcVolume`), and the code bytes of `PSMTXIdentity` and `g72x_init_state`, probably a
-relocation to a symbol inside an atom. Entry names longer than 63 characters are an
-error in the real linker. The generating code is in the linker: `FUN_00436b90` in the Ghidra program `mwld-gc-2-7` (the
+linkers. Of 360 random links that the real linker accepts, all are identical, ELF and map (the earlier 16 differences
+were three rules found since: an `R_PPC_EMB_SDA21` relocation may point 2 bytes into its instruction; active data
+with sized symbols is dropped like any other, while a section with no sized symbol, or a `.ctors`/`.dtors` hook, is kept
+whole; and the map's file offset of a symbol without size inside an atom is the atom's end, as the real linker prints
+it). One link of the sweep needs a common symbol (`SHN_COMMON`), which the replica refuses with an error. Entry names
+longer than 63 characters are an error in the real linker. The generating code is in the linker: `FUN_00436b90` in the Ghidra program `mwld-gc-2-7` (the
 PPC EABI symbol and hook generator; the strings `_ctors`, `_dtors`, `_eti_init_info` and the three `*_reference` hooks
 are used only there). It decides which of the linker's own `.ctors$10`, `.dtors$10` and `.dtors$15` hook pieces to
 add when the runtime's functions are not defined by an object; the replica does not port it and so does not make
@@ -159,6 +158,6 @@ linker, the 2.7 and 1.3.2 compilers, and the Echoes runtime objects, so that is 
 
 1. The linker command file, which every project uses, and `-opt_partial`: `FUN_00436b90` and its callers in Ghidra
    are the place to read what the real linker does with the sections of a link.
-2. Port the hook generator, and find where the unsized-global file offset comes from.
+2. Port the hook generator; support common symbols (find where the real linker puts them).
 3. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
    string table gives the file names and function boundaries for the former.

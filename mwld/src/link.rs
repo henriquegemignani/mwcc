@@ -11,11 +11,16 @@ pub const ORDER: [&str; 21] = [
 const NOBITS: [&str; 4] = [".sbss", ".sbss2", ".PPC.EMB.sbss0", ".bss"];
 const ACTIVE: u8 = 0x10;
 const FORCE_ACTIVE: u8 = 0x08;     // `#pragma force_active`: the symbol's own atom is kept
-const RUNTIME_ROOTS: [&str; 3] =
+/// Symbols that pull in the archive member defining them (the runtime's hooks).
+const ARCHIVE_PULLS: [&str; 3] =
     ["__init_cpp_exceptions_reference", "__fini_cpp_exceptions_reference", "__destroy_global_chain_reference"];
+/// The hooks that are roots of dead stripping (`__destroy_global_chain_reference` is not: nothing keeps it live).
+const STRIP_ROOTS: [&str; 2] = [ARCHIVE_PULLS[0], ARCHIVE_PULLS[1]];
 const LINKER_SYMBOLS: [&str; 15] = [
     "_SDA_BASE_", "_SDA2_BASE_", "_ABS_SDA_BASE_", "_ABS_SDA2_BASE_", "_stack_addr", "_stack_end", "_heap_addr",
     "_heap_end", "_nbfunctions", "SIZEOF_HEADERS", "_eti_init_info", "_ctors", "_ctors$99", "_dtors", "_dtors$99"];
+
+const SHN_COMMON: u16 = 0xFFF2;
 
 fn sized(s: &Symbol) -> bool {
     (s.typ == 1 || s.typ == 2) && s.size > 0
@@ -46,7 +51,7 @@ pub struct Atom {
     pub size: u32,
     pub align: u32,
     pub symbols: Vec<usize>,
-    pub forced: bool,
+    pub whole_section: bool,
     pub root: bool,
     pub live: bool,
     pub out_offset: u32,
@@ -104,7 +109,7 @@ pub struct Link {
     pub referenced: HashSet<(usize, usize)>,    // the (object, symbol) pairs live code refers to
 }
 
-fn defined(s: &Symbol) -> bool {
+pub fn defined(s: &Symbol) -> bool {
     s.bind >= 1 && 0 < s.shndx && s.shndx < 0xFF00
 }
 
@@ -146,7 +151,7 @@ impl Link {
             let mut wanted: HashSet<String> = link.objs.iter().flat_map(|o| o.elf.symbols.iter())
                 .filter(|s| s.shndx == 0 && s.bind >= 1 && !s.name.is_empty()).map(|s| s.name.clone()).collect();
             wanted.insert(link.entry.clone());
-            wanted.extend(RUNTIME_ROOTS.iter().map(|s| s.to_string()));
+            wanted.extend(ARCHIVE_PULLS.iter().map(|s| s.to_string()));
             wanted.retain(|n| !link.defs.contains_key(n));
             let found = archives.iter().enumerate().find_map(|(a, members)| {
                 members.iter().position(|m| m.3.symbols.iter().any(|s| defined(s) && wanted.contains(&s.name)))
@@ -171,6 +176,9 @@ impl Link {
                 flags[i] = comment.data[44 + 8 * i + 5];
             }
         }
+        if let Some(s) = e.symbols.iter().find(|s| s.shndx == SHN_COMMON) {
+            return Err(format!("common symbol '{}' in {name}: common symbols are not supported", s.name));
+        }
         let obj_index = self.objs.len();
         let mut atoms: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         for section in &e.sections {
@@ -184,8 +192,8 @@ impl Link {
                 e.symbols.iter().filter(|s| s.shndx as usize == section.index && s.typ != 3).collect();
             let mut sized: Vec<&Symbol> =
                 here.iter().copied().filter(|s| (s.typ == 1 || s.typ == 2) && s.size > 0).collect();
-            let new = |start, size, align, symbols, forced| Atom {
-                obj: obj_index, sec: section.index, start, size, align, symbols, forced, root: false, live: false, out_offset: 0,
+            let new = |start, size, align, symbols, whole_section| Atom {
+                obj: obj_index, sec: section.index, start, size, align, symbols, whole_section, root: false, live: false, out_offset: 0,
                 addr: 0 };
             let mut list: Vec<Atom> = vec![];
             if sized.is_empty() || here.iter().any(|s| flags[s.index] & ACTIVE != 0) {
@@ -278,7 +286,7 @@ impl Link {
                 mark(&mut self.atoms, &mut work, a);
             }
         }
-        for name in std::iter::once(self.entry.as_str()).chain(RUNTIME_ROOTS.into_iter().filter(|n| *n != RUNTIME_ROOTS[2])) {
+        for name in std::iter::once(self.entry.as_str()).chain(STRIP_ROOTS) {
             if let Some(&(o, s)) = self.defs.get(name) {
                 let (a, _) = self.target(o, s, 0).ok_or(format!("no code for '{name}'"))?;
                 mark(&mut self.atoms, &mut work, a);
@@ -294,9 +302,8 @@ impl Link {
                     }
                     let s = self.objs[obj].sym(r.sym);
                     if s.shndx == 0 && !self.defs.contains_key(&s.name) && s.bind != 2
-                        && !LINKER_SYMBOLS.contains(&s.name.as_str()) && !s.name.starts_with("_f_")
-                        && !s.name.starts_with("_e_") {
-                        let from = &self.objs[obj].sym(self.atoms[a].symbols[0]).name;
+                        && !LINKER_SYMBOLS.contains(&s.name.as_str()) && !crate::layout::is_section_symbol(&s.name) {
+                        let from = self.atoms[a].symbols.first().map_or(self.section_name(a), |&s| &self.objs[obj].sym(s).name);
                         return Err(linker_error(&[format!("#   undefined: '{}'", s.name),
                             format!("#   Referenced from '{}' in {}", from, self.objs[obj].name)]));
                     }
@@ -311,11 +318,11 @@ impl Link {
                 for a in ids {
                     let atom = &self.atoms[a];
                     let section = &self.objs[o].elf.sections[atom.sec].name;
-                    // (an active section stays whole when it is a constructor or destructor hook or has no sized symbol;
-                    // active data with sized symbols is dropped like any other)
-                    let hook = section.starts_with(".ctors") || section.starts_with(".dtors");
-                    if (atom.forced && atom.size > 0 && (hook || !atom.symbols.iter().any(|&s| sized(self.objs[o].sym(s))))
-                        || matches!(output_name(section), Some(".ctors") | Some(".dtors")))
+                    // (a whole-section atom with no sized symbol stays, e.g. a hook section; active data that has sized
+                    // symbols is dropped like any other; so are the constructors and destructors of a dead object)
+                    let bare = atom.whole_section && atom.size > 0
+                        && !atom.symbols.iter().any(|&s| sized(self.objs[o].sym(s)));
+                    if (bare || matches!(output_name(section), Some(".ctors") | Some(".dtors")))
                         && !atom.symbols.iter().any(|s| self.objs[o].lost.contains(s)) {
                         mark(&mut self.atoms, &mut work, a);
                     }

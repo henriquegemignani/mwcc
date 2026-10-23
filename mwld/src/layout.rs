@@ -38,6 +38,25 @@ pub struct Layout {
     pub sym_map: HashMap<String, u32>,
 }
 
+/// The names of the linker's symbols for an output section: its start, the ROM address of its start, its end.
+fn section_symbol_names(name: &str) -> (String, String, String) {
+    let dotted = name.starts_with('.');
+    let tag = if dotted { name.trim_matches('.').replace('.', "_") } else { name.to_string() };
+    let sep = if dotted { "_" } else { "" };
+    (format!("_f{sep}{tag}"), format!("_f{sep}{tag}_rom"), format!("_e{sep}{tag}"))
+}
+
+/// Whether `name` is one of the `_f_X`, `_f_X_rom` and `_e_X` symbols the linker defines for an output section.
+pub fn is_section_symbol(name: &str) -> bool {
+    ORDER.iter().any(|o| { let (f, r, e) = section_symbol_names(o); name == f || name == r || name == e })
+}
+
+/// The widest alignment among the input sections that go to an output section, even those stripped.
+fn widest_input_align(link: &Link, output: &str) -> u32 {
+    link.objs.iter().flat_map(|o| o.elf.sections.iter())
+        .filter(|s| s.flags & 2 != 0 && output_name(&s.name) == Some(output)).map(|s| s.align).max().unwrap_or(1)
+}
+
 pub fn oi(name: &str) -> usize {
     ORDER.iter().position(|&n| n == name).unwrap()
 }
@@ -131,9 +150,7 @@ impl Layout {
         for i in 0..n {
             if !lay.nonempty.contains(&i) {
                 // (an empty section is aligned for the input sections there were, even when all of them were stripped)
-                let widest = link.objs.iter().flat_map(|o| o.elf.sections.iter())
-                    .filter(|s| s.flags & 2 != 0 && output_name(&s.name) == Some(ORDER[i])).map(|s| s.align).max().unwrap_or(1);
-                lay.map_off[i] = align(pos, widest);
+                lay.map_off[i] = align(pos, widest_input_align(link, ORDER[i]));
             } else {
                 pos = align(pos, lay.align[i]);
                 lay.map_off[i] = pos;
@@ -157,18 +174,14 @@ impl Layout {
     fn generated_symbols(&mut self, link: &Link) {
         let mut syms: Vec<(String, u32)> = vec![];
         for (i, name) in ORDER.iter().enumerate() {
-            let dotted = name.starts_with('.');
-            let tag = if dotted { name.trim_matches('.').replace('.', "_") } else { name.to_string() };
-            let sep = if dotted { "_" } else { "" };
+            let (first, rom, end) = section_symbol_names(name);
             let (f, e) = (self.addr[i], self.addr[i] + self.size[i]);
-            syms.push((format!("_f{sep}{tag}"), f));
+            syms.push((first, f));
             if !is_nobits(name) {
                 // (a ROM address is aligned for the input sections there were, even when all of them were stripped)
-                let widest = link.objs.iter().flat_map(|o| o.elf.sections.iter())
-                    .filter(|s| s.flags & 2 != 0 && output_name(&s.name) == Some(name)).map(|s| s.align).max().unwrap_or(1);
-                syms.push((format!("_f{sep}{tag}_rom"), align(f, widest)));
+                syms.push((rom, align(f, widest_input_align(link, name))));
             }
-            syms.push((format!("_e{sep}{tag}"), e));
+            syms.push((end, e));
         }
         let functions = link.objs.iter().flat_map(|o| o.atoms.values().flatten())
             .filter(|&&a| link.atoms[a].live && link.atoms[a].symbols.iter().any(|&s| link.objs[link.atoms[a].obj].sym(s).typ == 2))

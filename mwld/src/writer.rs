@@ -1,7 +1,7 @@
 //! Section contents, relocations, the symbol table and the output ELF file.
 use crate::elf::{be32, to_latin1, R};
 use crate::layout::{oi, Layout};
-use crate::link::{align, is_nobits, output_name, Link, ORDER};
+use crate::link::{defined, align, is_nobits, output_name, Link, ORDER};
 use std::collections::HashMap;
 
 struct Ent {
@@ -42,7 +42,7 @@ fn cats_entries(link: &Link, o: usize) -> Vec<([u8; 4], usize, u32)> {
     let mut out = vec![];
     for i in 0..section.data.len() / 8 {
         let target = relas.iter().filter(|r| r.offset as usize == 8 * i + 4)
-            .fold(None, |_, r| link.target(o, r.sym, r.addend));
+            .last().and_then(|r| link.target(o, r.sym, r.addend));
         if let Some((atom, offset)) = target {
             if link.atoms[atom].live {
                 out.push((section.data[8 * i..8 * i + 4].try_into().unwrap(), atom, offset));
@@ -100,14 +100,13 @@ fn apply_relocs(link: &Link, lay: &Layout, data: &mut [Vec<u8>]) -> R<()> {
                     let pos = (atom.out_offset + r.offset - atom.start) as usize;
                     let p = atom.addr + r.offset - atom.start;
                     let buf = &mut data[i];
-                    let word = if pos + 4 <= buf.len() { be32(buf, pos) } else { 0 };
                     match r.kind {
                         1 => put32(buf, pos, value),
                         3 | 4 => put16(buf, pos, value),
                         5 => put16(buf, pos, value >> 16),
                         6 => put16(buf, pos, value.wrapping_add(0x8000) >> 16),
-                        10 => put32(buf, pos, (word & 0xFC000003) | (value.wrapping_sub(p) & 0x03FFFFFC)),
-                        11 => put32(buf, pos, (word & 0xFFFF0003) | (value.wrapping_sub(p) & 0xFFFC)),
+                        10 => { let w = be32(buf, pos); put32(buf, pos, (w & 0xFC000003) | (value.wrapping_sub(p) & 0x03FFFFFC)) }
+                        11 => { let w = be32(buf, pos); put32(buf, pos, (w & 0xFFFF0003) | (value.wrapping_sub(p) & 0xFFFC)) }
                         109 => {
                             let (reg, base) = match tsec {
                                 Some(".sdata") | Some(".sbss") => (13, lay.sda),
@@ -118,8 +117,8 @@ fn apply_relocs(link: &Link, lay: &Layout, data: &mut [Vec<u8>]) -> R<()> {
                             };
                             // (the compiler may point the relocation at the displacement, 2 bytes into the instruction)
                             let pos = pos - (r.offset & 3) as usize;
-                            let word = be32(buf, pos);
-                            put32(buf, pos, (word & 0xFFE00000) | (reg << 16) | (value.wrapping_sub(base) & 0xFFFF));
+                            let w = be32(buf, pos);
+                            put32(buf, pos, (w & 0xFFE00000) | (reg << 16) | (value.wrapping_sub(base) & 0xFFFF));
                         }
                         k => return Err(format!("unsupported relocation type {k}")),
                     }
@@ -202,7 +201,7 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
     // (a global without a size, such as the `_savefpr_N` entry points inside `__save_fpr`, stays only if code refers to it)
     for (o, obj) in link.objs.iter().enumerate() {
         for s in &obj.elf.symbols {
-            if s.bind >= 1 && 0 < s.shndx && s.shndx < 0xFF00 && !obj.lost.contains(&s.index)
+            if defined(s) && !obj.lost.contains(&s.index)
                 && (s.size > 0 || link.referenced.contains(&(o, s.index))) {
                 let atom = obj.atoms.get(&(s.shndx as usize)).and_then(|ids| {
                     ids.iter().map(|&a| &link.atoms[a]).find(|a| a.contains(s.value))

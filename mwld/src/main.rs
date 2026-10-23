@@ -5,8 +5,9 @@
 //!
 //! * An input section is cut into atoms, one per sized symbol (the symbol's alignment is in the object's `.comment`); a
 //!   section with a symbol the compiler marked active (`...data.0`) is one atom.
-//! * Atoms nothing refers to are dropped. The roots are the entry point, the `.ctors` and `.dtors` atoms and the
-//!   C++ runtime's `*_reference` symbols.
+//! * Atoms nothing refers to are dropped. The roots are the entry point, the atoms of symbols marked `force_active`
+//!   and the C++ runtime's init and fini `*_reference` symbols; constructors, destructors and hook sections stay
+//!   only in objects that are otherwise live.
 //! * The output sections go from 0x10000 in the default order, relocations are applied, and the ELF and the link map
 //!   are written.
 mod elf;

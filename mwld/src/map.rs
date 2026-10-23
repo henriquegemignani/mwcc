@@ -28,7 +28,7 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
             sym.size > 0 || sym.bind == 0 || link.referenced.contains(&(o, s))
         }) {
             let sym = obj.sym(s);
-            let owner = if atom.forced { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
+            let owner = if atom.whole_section { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
             // (the file offset of a symbol without size inside an atom is where the atom ends)
             let inside = sym.size == 0 && sym.value > atom.start;
             items.push((atom.out_offset + sym.value - atom.start, sym.size > 0, s, owner,
