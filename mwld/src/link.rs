@@ -132,6 +132,7 @@ pub struct Link {
     pub rom_ref: bool,      // some live code refers to `_rom_copy_info` or `_bss_init_info`
     pub partial: bool,                  // `-r`: relocatable output, nothing is stripped unless `-strip_partial`
     pub strip_partial: bool,
+    pub unplaced: Vec<&'static str>,    // the output sections a command file leaves out of a partial link
     /// The names nothing defines, in the order the linker comes across them when it walks the code from its roots, each with
     /// the object whose code named it first (none for a name a command file keeps active).
     pub not_found: Vec<(String, Option<usize>)>,
@@ -162,7 +163,7 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial, not_found: vec![], linker_refs: HashSet::new(),
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial, unplaced: plan.unplaced(), not_found: vec![], linker_refs: HashSet::new(),
                                 referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
                                 assigned: plan.assigns.iter().map(|a| a.0.clone()).collect() };
@@ -527,6 +528,13 @@ impl Link {
             }
         }
         if self.partial {
+            // (what a command file does not place is not in the output)
+            let unplaced = self.unplaced.clone();
+            for a in 0..self.atoms.len() {
+                if output_name(self.section_name(a)).map_or(false, |n| unplaced.contains(&n)) {
+                    self.atoms[a].live = false;
+                }
+            }
             self.discover();
         }
         self.record_references();

@@ -162,7 +162,7 @@ struct SymbolTable {
 
 /// The output section index (counting the null section as 0) of the output section `i` of ORDER.
 fn shndx_of(lay: &Layout, i: usize) -> u16 {
-    lay.nonempty.iter().position(|&x| x == i).unwrap() as u16 + 1
+    lay.nonempty.iter().position(|&x| x == i).unwrap_or_else(|| panic!("section {} not in the output", ORDER[i])) as u16 + 1
 }
 
 /// The output symbol standing for the section symbol of an object's input section.
@@ -349,7 +349,7 @@ fn partial_symbol_table(link: &Link, lay: &Layout) -> SymbolTable {
                     entries.push(Ent { name: s.name.clone(), value: 0, size: 0, info: (s.bind << 4) | s.typ, shndx: 0 });
                     comment.push(entry(1));
                 }
-            } else if let Some(atom) = link.atom_of(o, s).filter(|_| !obj.lost.contains(&s.index)) {
+            } else if let Some(atom) = link.atom_of(o, s).filter(|a| a.live && !obj.lost.contains(&s.index)) {
                 new_index[o].insert(s.index, entries.len());
                 let out = output_name(&obj.elf.sections[s.shndx as usize].name).unwrap();
                 entries.push(Ent { name: s.name.clone(), value: atom.where_(s.value), size: s.size,

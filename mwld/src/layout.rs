@@ -56,6 +56,14 @@ impl Plan {
                assigns: vec![], lcf: false, partial: false, strip_partial: false, force_active: vec![] }
     }
 
+    /// The output sections a linker command file does not place (none without one, or without `-r`).
+    pub fn unplaced(&self) -> Vec<&'static str> {
+        if !(self.lcf && self.partial) {
+            return vec![];
+        }
+        (0..ORDER.len()).filter(|i| !self.seq.iter().any(|s| s.0 == *i)).map(|i| ORDER[i]).collect()
+    }
+
     pub fn from_lcf(lcf: Lcf) -> R<Plan> {
         let mut seq = vec![];
         for (name, align) in &lcf.sections {
