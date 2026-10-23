@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""python tools/linker_oracle.py LINKER_DIR OUT_DIR --runtime DIR [NAME...]: link small test programs with the real
-mwldeppc.exe (the oracle) and with the replica, tools/mwld.py, and compare the ELF files and the link maps.
+"""python tools/linker_oracle.py LINKER_DIR OUT_DIR --runtime DIR [--mwld EXE] [NAME...]: link small test programs with
+the real mwldeppc.exe (the oracle) and with the replica (the Rust crate in mwld/; build it with `cargo build --release`),
+and compare the ELF files and the link maps.
 
 LINKER_DIR holds mwcceppc.exe, mwldeppc.exe and lmgr326b.dll (for example build/compilers/GC/2.7). The linker needs the
 MSL runtime's `__init_cpp_exceptions` and `global_destructor_chain` objects (--runtime DIR); the runtime's
@@ -12,6 +13,7 @@ Each scenario is a set of C or C++ sources and compiler flags, and optionally: a
 whose objects have another `.comment` version; the linker stays 2.7). Every scenario here is compiled by a Metrowerks
 compiler of that kind and linked with the same two MSL runtime objects."""
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +21,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import elf
 import elfdiff
-import mwld
 
 STUB = "void __register_fragment(void){} void __unregister_fragment(void){}\n"
 STUB_CPP = ('extern "C" { void __end__catch(void){} void _savegpr_29(void){} void _restgpr_29(void){} '
@@ -92,7 +93,7 @@ def compare(oracle_elf, mine_elf, oracle_map, mine_map):
     return problems
 
 
-def scenario(name, linker_dir, out_root, runtime):
+def scenario(name, linker_dir, out_root, runtime, mwld):
     sources, flags = SCENARIOS[name]
     options = flags if isinstance(flags, dict) else {}
     compiler = linker_dir.parent / options["compiler"] if "compiler" in options else linker_dir
@@ -122,10 +123,9 @@ def scenario(name, linker_dir, out_root, runtime):
     code, log = run(linker_dir / "mwldeppc.exe", *common, "-map", out / "oracle.map", "-o", out / "oracle.elf", *inputs)
     if code:
         return [f"the real linker failed:\n{log}"]
-    try:
-        mwld.main([*common, "-map", str(out / "mine.map"), "-o", str(out / "mine.elf"), *map(str, inputs)])
-    except SystemExit as exit:
-        return [f"the replica stopped: {exit}"]
+    code, log = run(mwld, *common, "-map", out / "mine.map", "-o", out / "mine.elf", *inputs)
+    if code:
+        return [f"the replica stopped: {log}"]
     return compare(out / "oracle.elf", out / "mine.elf", out / "oracle.map", out / "mine.map")
 
 
@@ -135,11 +135,13 @@ def main():
     parser.add_argument("out_dir", type=Path)
     parser.add_argument("--runtime", type=Path, required=True,
                         help="directory with global_destructor_chain.o and __init_cpp_exceptions.o")
+    parser.add_argument("--mwld", type=Path, default=Path(os.environ.get("CARGO_TARGET_DIR", Path(__file__).parent.parent / "mwld/target"))
+                        / "release/mwld.exe", help="the replica (default: release/mwld.exe in cargo's target directory)")
     parser.add_argument("names", nargs="*", help=f"scenarios to run (default all): {', '.join(SCENARIOS)}")
     args = parser.parse_args()
     failed = 0
     for name in args.names or SCENARIOS:
-        problems = scenario(name, args.linker_dir, args.out_dir, args.runtime)
+        problems = scenario(name, args.linker_dir, args.out_dir, args.runtime, args.mwld)
         print(f"{name}: {'identical' if not problems else 'DIFFERENT'}")
         for problem in problems:
             print("  " + problem.replace("\n", "\n  "))

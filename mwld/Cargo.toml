@@ -1,0 +1,7 @@
+[package]
+name = "mwld"
+version = "0.1.0"
+edition = "2021"
+description = "A replica of the GC 2.7 linker (mwldeppc.exe, Metrowerks Linker 3.0.4) for a link with no linker command file"
+
+[dependencies]

@@ -80,13 +80,13 @@ per symbol with an alignment column and the owning object), then `Memory map:`, 
 
 ## The oracle and the replica
 
-The real linker runs on this machine, so it is the test oracle. `tools/mwld.py` is a replica of a link with no linker
-command file, and `tools/linker_oracle.py LINKER_DIR OUT --runtime DIR` links eleven small programs with both and
-compares the ELF files (`tools/elfdiff.py`) and the link maps. All eleven are byte-identical, both ELF and map: dead
+The real linker runs on this machine, so it is the test oracle. `mwld/` is a Rust crate (`cargo build --release`) that replicates a link with no linker
+command file (`src/link.rs` loads and strips, `layout.rs` places, `writer.rs` writes the ELF, `map.rs` the map), and `tools/linker_oracle.py LINKER_DIR OUT --runtime DIR [--mwld EXE]` links eleven small programs with both and
+compares the ELF files (`tools/elfdiff.py`, an independent Python reader) and the link maps. All eleven are byte-identical, both ELF and map: dead
 code, two units, `-sdata 0` and `-sdata 64` data, per-symbol alignment, floats and switch tables, pointer data, C++
 with exceptions and RTTI, an archive made by the real linker's `-library`, an object compiled with `-pragma "cats off"`,
 and an object from the 1.3.2 compiler (`.comment` version 10). Every program is compiled by a Metrowerks compiler
-and linked with the same two MSL runtime objects (Echoes') as `__init_cpp_exceptions` and `global_destructor_chain`. `tools/elf.py` reads the objects.
+and linked with the same two MSL runtime objects (Echoes') as `__init_cpp_exceptions` and `global_destructor_chain`. 
 
 What the real linker does, as found by those links:
 
@@ -119,7 +119,7 @@ What the real linker does, as found by those links:
   Sections: the loadable ones, `.rela*`, `.mwcats.text`, `.symtab`, `.shstrtab`, `.strtab` in the file in the order
   `.shstrtab`, `.strtab`, `.symtab`, relocations, `.mwcats.text`, with the section header table at the next multiple
   of 16.
-* **The map.** The format of `tools/mwld.py`'s `write_map`; the quirks are that a section's size is the input
+* **The map.** The format of `mwld/src/map.rs`; the quirks are that a section's size is the input
   section's size before stripping, that a `*fill*` row shows the address after the fill, that the first `extabindex`
   listing is empty and the second has only symbol rows with the file offset of the end of the section, and that the
   `_f_X_rom` address is aligned for the input sections there were even if all were stripped.
