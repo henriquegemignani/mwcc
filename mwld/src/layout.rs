@@ -46,13 +46,14 @@ pub struct Plan {
     pub assigns: Vec<(String, Expr)>,
     pub lcf: bool,
     pub partial: bool,
+    pub strip_partial: bool,
     pub force_active: Vec<String>,
 }
 
 impl Plan {
     pub fn default_plan() -> Plan {
         Plan { origin: BASE, seq: (0..ORDER.len()).filter(|&i| ORDER[i] != ".stack").map(|i| (i, None)).collect(),
-               assigns: vec![], lcf: false, partial: false, force_active: vec![] }
+               assigns: vec![], lcf: false, partial: false, strip_partial: false, force_active: vec![] }
     }
 
     pub fn from_lcf(lcf: Lcf) -> R<Plan> {
@@ -67,8 +68,10 @@ impl Plan {
             }
             seq.push((i, *align));
         }
-        let origin = lcf.origin.ok_or("linker command file: the first MEMORY region has no origin")?;
-        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, partial: false, force_active: lcf.force_active })
+        crate::link::set_bodies(&lcf.bodies);
+        // (a file without MEMORY places nothing: its output is a partial link, where every address is zero)
+        let origin = if lcf.memory { lcf.origin.ok_or("linker command file: the first MEMORY region has no origin")? } else { 0 };
+        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, partial: false, strip_partial: false, force_active: lcf.force_active })
     }
 }
 
@@ -134,6 +137,12 @@ fn gen_piece(name: &str, gen: Vec<GenSymbol>) -> Piece {
 impl Layout {
     pub fn new(link: &mut Link, plan: &Plan) -> R<Layout> {
         let mut pieces: Vec<Vec<Piece>> = vec![];
+        // (in a partial link the markers of both lists appear as soon as either holds something besides the runtime's hooks)
+        let user_ctor_dtor = link.objs.iter().any(|obj| obj.atoms.iter().any(|(&i, ids)| {
+            let name = &obj.elf.sections[i].name;
+            ids.iter().any(|&a| link.atoms[a].live) && matches!(output_name(name), Some(".ctors") | Some(".dtors"))
+                && !(name.ends_with("$10") || name.ends_with("$15"))
+        }));
         for name in ORDER {
             let mut found = vec![];
             for (o, obj) in link.objs.iter().enumerate() {
@@ -152,20 +161,26 @@ impl Layout {
             // (the runtime's own `$10` and `$15` hooks do not count), or whenever an exception table is live; the
             // exception table index has its 32-byte info when one is live, and an empty `_eti_init_info` when only
             // code refers to it.
+            found.sort_by_key(|p| crate::link::body_rank(&p.name));    // (a section body lists its inputs in order)
             let hooks = |p: &Piece| p.name.ends_with("$10") || p.name.ends_with("$15");
             if name == ".bss" {
                 found.sort_by_key(|p| p.obj.zip(p.sec.as_ref()).map_or(false, |(o, s)| link.objs[o].elf.sections[s.index].synthetic));
             }
-            if plan.partial {
+            if plan.partial && !plan.lcf {
                 pieces.push(found);
                 continue;
             }
             if name == ".ctors" || name == ".dtors" {
                 found.sort_by_key(|p| (p.name == name, p.name.clone()));    // (an unsuffixed one follows the suffixed)
             }
-            if (name == ".ctors" || name == ".dtors") && (link.eh || found.iter().any(|p| !hooks(p))) {
+            if (name == ".ctors" || name == ".dtors") && (link.eh || found.iter().any(|p| !hooks(p)) || (plan.partial && user_ctor_dtor)) {
                 let sym = format!("_{}", &name[1..]);
                 found.insert(0, gen_piece(&format!("{name}$00"), vec![gen_symbol(sym.clone(), 0, 0, 0)]));
+                if plan.partial && name == ".dtors" && found.iter().any(|p| p.name == ".dtors$10") {
+                    // (a partial link repeats the destructor chain's reference, once, in a piece of its own)
+                    let at = found.iter().rposition(|p| p.name == ".dtors$10").map_or(found.len(), |k| k + 1);
+                    found.insert(at, gen_piece(".dtors$10", vec![gen_symbol("__destroy_global_chain_reference", 0, 4, 1)]));
+                }
                 found.push(gen_piece(&format!("{name}$99"), vec![gen_symbol(format!("{sym}$99"), 0, 4, 1)]));
             }
             if name == "extabindex" && link.eh {

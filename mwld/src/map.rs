@@ -58,7 +58,8 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
         // the symbols nothing defines (the real linker lists them in an order of its own; this is the symbol tables')
         let mut seen = std::collections::HashSet::new();
         for obj in &link.objs {
-            for s in obj.elf.symbols.iter().filter(|s| s.shndx == 0 && !s.name.is_empty() && !link.defs.contains_key(&s.name)) {
+            for s in obj.elf.symbols.iter().filter(|s| s.shndx == 0 && !s.name.is_empty() && !link.defs.contains_key(&s.name)
+                && !lay.pieces.iter().flatten().any(|p| p.gen.iter().any(|g| g.name == s.name))) {
                 if seen.insert(s.name.clone()) {
                     out.push_str(&format!(">>> SYMBOL NOT FOUND: {}\n", s.name));
                 }

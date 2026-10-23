@@ -1,6 +1,6 @@
 //! Section contents, relocations, the symbol table and the output ELF file.
 use crate::elf::*;
-use crate::layout::{init_info_sections, oi, section_symbol_names, Layout};
+use crate::layout::{init_info_sections, oi, section_symbol_names, Layout, Piece};
 use crate::link::{align, is_nobits, output_name, Link, ORDER};
 use std::collections::{HashMap, HashSet};
 
@@ -323,12 +323,21 @@ fn partial_symbol_table(link: &Link, lay: &Layout) -> SymbolTable {
             comment.push(entry(section.align));
         }
     }
+    // the linker's own pieces (the markers of the constructors and destructors) have section symbols too, and symbols
+    // that follow all the others
+    let generated: Vec<(usize, &Piece)> =
+        lay.seq.iter().flat_map(|&i| lay.pieces[i].iter().filter(|p| !p.gen.is_empty()).map(move |p| (i, p))).collect();
+    for &(i, piece) in &generated {
+        entries.push(Ent { name: String::new(), value: piece.start, size: 0, info: STT_SECTION, shndx: shndx_of(lay, i) });
+        comment.push(entry(4));
+    }
     let first_global = entries.len();
     let mut undefined = HashMap::new();
     for (o, obj) in link.objs.iter().enumerate() {
         for s in obj.elf.symbols.iter().filter(|s| s.bind >= STB_GLOBAL && !s.name.is_empty() && s.typ != STT_FILE) {
             if s.shndx == 0 {
-                if !link.defs.contains_key(&s.name) && !undefined.contains_key(&s.name) {
+                if !link.defs.contains_key(&s.name) && !undefined.contains_key(&s.name)
+                    && !generated.iter().any(|(_, p)| p.gen.iter().any(|g| g.name == s.name)) {
                     undefined.insert(s.name.clone(), entries.len());
                     entries.push(Ent { name: s.name.clone(), value: 0, size: 0, info: (s.bind << 4) | s.typ, shndx: 0 });
                     comment.push(entry(1));
@@ -340,6 +349,14 @@ fn partial_symbol_table(link: &Link, lay: &Layout) -> SymbolTable {
                                    info: (s.bind << 4) | s.typ, shndx: shndx_of(lay, oi(out)) });
                 comment.push(kept(obj.cmt[s.index]));
             }
+        }
+    }
+    for &(i, piece) in &generated {
+        for g in &piece.gen {
+            undefined.entry(g.name.clone()).or_insert(entries.len());    // (code that refers to a generated symbol)
+            entries.push(Ent { name: g.name.clone(), value: piece.start + g.offset, size: g.size,
+                               info: (STB_GLOBAL << 4) | g.typ, shndx: shndx_of(lay, i) });
+            comment.push(entry(4));
         }
     }
     SymbolTable { entries, comment, undefined, new_index, first_global }
@@ -433,9 +450,10 @@ fn cats_section(link: &Link, cats: &[usize]) -> Vec<u8> {
 }
 
 /// The `.comment` section of a partial link: the linker's header, then an entry for each symbol.
-fn comment_bytes(entries: &[[u8; 8]]) -> Vec<u8> {
+fn comment_bytes(entries: &[[u8; 8]], generated: bool) -> Vec<u8> {
     let mut out = b"CodeWarrior".to_vec();
-    out.extend_from_slice(&[0x0d, 0x03, 0x00, 0x00, 0x02, 0x00, 0x02, 0x00, 0x14, 0x2c]);
+    // (the fifth byte reads 3 instead of 2 when the linker has symbols of its own in the output)
+    out.extend_from_slice(&[0x0d, 0x03, 0x00, 0x00, if generated { 3 } else { 2 }, 0x00, 0x02, 0x00, 0x14, 0x2c]);
     out.resize(44, 0);
     entries.iter().for_each(|e| out.extend_from_slice(e));
     out
@@ -476,7 +494,7 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
     let data = section_contents(link, lay)?;
     let cats_data = cats_section(link, &cats);
     let (symtab, strtab) = symtab_bytes(&entries);
-    let comment_data = if link.partial { comment_bytes(&comment) } else { vec![] };
+    let comment_data = if link.partial { comment_bytes(&comment, lay.pieces.iter().flatten().any(|p| !p.gen.is_empty())) } else { vec![] };
 
     let mut out_secs = vec![];       // (order index, type, flags, entsize)
     let mut pos = lay.hdr;
@@ -520,6 +538,11 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
             };
             let idx = *idx.ok_or(format!("no output symbol for '{name}'"))?;
             push32(&mut bytes, &[atom.where_(r_offset), ((idx as u32) << 8) | kind as u32, addend as u32]);
+        }
+        // (the destructor chain's reference the linker repeats refers to the chain)
+        for piece in lay.pieces[i].iter().filter(|p| link.partial && p.obj.is_none() && p.name == ".dtors$10") {
+            let (fo, fs) = link.defs["__destroy_global_chain"];
+            push32(&mut bytes, &[piece.start, ((new_index[fo][&fs] as u32) << 8) | R_PPC_ADDR32 as u32, 0]);
         }
         rela_pos.push(pos);
         pos += bytes.len() as u32;

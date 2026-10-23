@@ -2,6 +2,7 @@
 use crate::elf::{self, *};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
+use std::sync::OnceLock;
 
 pub const BASE: u32 = 0x10000;
 pub const ORDER: [&str; 22] = [
@@ -34,7 +35,29 @@ pub fn is_nobits(name: &str) -> bool {
 }
 
 /// The output section an input section goes to (`.ctors$10` is part of `.ctors`).
+/// The input sections a linker command file's section bodies name: the output section and the position in the body.
+static BODIES: OnceLock<HashMap<String, (&'static str, usize)>> = OnceLock::new();
+
+pub fn set_bodies(bodies: &[(String, Vec<String>)]) {
+    let mut map = HashMap::new();
+    for (output, inputs) in bodies {
+        let Some(out) = ORDER.iter().find(|&&o| o == output) else { continue };
+        for (rank, input) in inputs.iter().enumerate() {
+            map.insert(input.clone(), (*out, rank));
+        }
+    }
+    let _ = BODIES.set(map);
+}
+
+/// The position of an input section in the body that names it (0 when no body does).
+pub fn body_rank(name: &str) -> usize {
+    BODIES.get().and_then(|m| m.get(name)).map_or(0, |&(_, rank)| rank)
+}
+
 pub fn output_name(name: &str) -> Option<&'static str> {
+    if let Some(&(out, _)) = BODIES.get().and_then(|m| m.get(name)) {
+        return Some(out);
+    }
     for prefix in [".ctors", ".dtors"] {
         if name == prefix || name.starts_with(&format!("{prefix}$")) {
             return ORDER.iter().find(|&&o| o == prefix).copied();
@@ -107,7 +130,8 @@ pub struct Link {
     pub eh: bool,           // some exception table (extabindex) is live
     pub eti_ref: bool,      // some live code refers to `_eti_init_info`
     pub rom_ref: bool,      // some live code refers to `_rom_copy_info` or `_bss_init_info`
-    pub partial: bool,                  // `-r`: relocatable output, nothing is stripped
+    pub partial: bool,                  // `-r`: relocatable output, nothing is stripped unless `-strip_partial`
+    pub strip_partial: bool,
     pub linker_refs: HashSet<String>,   // the symbols live code takes from the linker
     pub force_active: Vec<String>,  // symbols a linker command file keeps (FORCEACTIVE)
     pub assigned: HashSet<String>,  // symbols a linker command file defines
@@ -135,7 +159,7 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, linker_refs: HashSet::new(),
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial, linker_refs: HashSet::new(),
                                 referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
                                 assigned: plan.assigns.iter().map(|a| a.0.clone()).collect() };
@@ -325,7 +349,7 @@ impl Link {
     }
 
     fn strip(&mut self) -> R<()> {
-        if self.partial {
+        if self.partial && !self.strip_partial {
             self.atoms.iter_mut().for_each(|a| a.live = true);
             // (unreferenced global data with sized symbols is dropped even here)
             let mut used = vec![false; self.atoms.len()];
@@ -377,7 +401,7 @@ impl Link {
                         continue;
                     }
                     let s = self.objs[obj].sym(r.sym);
-                    if s.shndx == 0 && !self.defs.contains_key(&s.name) && s.bind != STB_WEAK
+                    if !self.partial && s.shndx == 0 && !self.defs.contains_key(&s.name) && s.bind != STB_WEAK
                         && !LINKER_SYMBOLS.contains(&s.name.as_str()) && !self.assigned.contains(&s.name) && !crate::layout::is_section_symbol(&s.name) {
                         let from = self.atoms[a].symbols.first().map_or(self.section_name(a), |&s| &self.objs[obj].sym(s).name);
                         return Err(linker_error(&[format!("#   undefined: '{}'", s.name),
@@ -441,7 +465,7 @@ impl Link {
         }
         self.record_references();
         self.referenced.extend(self.defs.get(&self.entry).copied());
-        if self.eh && !self.defs.contains_key("__init_cpp_exceptions") {
+        if self.eh && !self.partial && !self.defs.contains_key("__init_cpp_exceptions") {
             return Err(linker_error(&["#   undefined: '__init_cpp_exceptions'".into(),
                 "#   Referenced from '__init_cpp_exceptions_reference' in Linker Generated".into(),
                 "#   Symbol File".into()]));

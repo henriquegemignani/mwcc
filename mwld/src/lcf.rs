@@ -1,5 +1,5 @@
 //! The linker command file: `MEMORY`, `SECTIONS` (one `GROUP` of output sections, then symbol assignments) and
-//! `FORCEACTIVE`. Section bodies that name input sections (`*(.data)`) are not supported yet.
+//! `FORCEACTIVE`. A section body lists input sections by name (`*(.data) *(extab)`); nothing else is supported in one.
 use crate::elf::R;
 use std::collections::HashMap;
 
@@ -13,8 +13,11 @@ pub enum Expr {
 
 pub struct Lcf {
     pub origin: Option<u32>,
+    pub memory: bool,
     /// The output sections in order, each with the alignment the file gives it.
     pub sections: Vec<(String, Option<u32>)>,
+    /// The input sections each output section names (`*(.data) *(extab)`), by output section.
+    pub bodies: Vec<(String, Vec<String>)>,
     /// The symbol assignments, in order.
     pub assigns: Vec<(String, Expr)>,
     pub force_active: Vec<String>,
@@ -92,19 +95,6 @@ impl Parser {
         hit
     }
 
-    fn skip_block(&mut self) -> R<()> {
-        self.expect("{")?;
-        let mut depth = 1;
-        while depth > 0 {
-            match self.next()?.as_str() {
-                "{" => depth += 1,
-                "}" => depth -= 1,
-                _ => {}
-            }
-        }
-        Ok(())
-    }
-
     // expression: | lowest, then &, then << >>, then + -, then * , then unary ~ and primaries
     fn expr(&mut self) -> R<Expr> {
         self.binary(0)
@@ -163,11 +153,12 @@ fn split_force_active(text: &str) -> R<(String, Vec<String>)> {
 pub fn parse(text: &str) -> R<Lcf> {
     let (text, force_active) = split_force_active(text)?;
     let mut p = Parser { toks: tokens(&text)?, at: 0 };
-    let mut lcf = Lcf { origin: None, sections: vec![], assigns: vec![], force_active };
+    let mut lcf = Lcf { origin: None, memory: false, sections: vec![], assigns: vec![], bodies: vec![], force_active };
     while let Some(head) = p.peek().map(String::from) {
         p.at += 1;
         match head.as_str() {
             "MEMORY" => {
+                lcf.memory = true;
                 p.expect("{")?;
                 let mut first = true;
                 while !p.eat("}") {
@@ -203,10 +194,16 @@ pub fn parse(text: &str) -> R<Lcf> {
                                 p.expect(")")?;
                             }
                             p.expect(":")?;
-                            let at = p.at;
-                            p.skip_block()?;
-                            if p.at - at != 2 {
-                                return Err(format!("linker command file: the body of section {name} is not supported"));
+                            p.expect("{")?;
+                            let mut body = vec![];
+                            while !p.eat("}") {
+                                p.expect("*")?;
+                                p.expect("(")?;
+                                body.push(p.next()?);
+                                p.expect(")")?;
+                            }
+                            if !body.is_empty() {
+                                lcf.bodies.push((name.clone(), body));
                             }
                             lcf.sections.push((name, align));
                         }

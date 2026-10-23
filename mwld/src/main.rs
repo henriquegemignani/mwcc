@@ -26,6 +26,7 @@ fn run(args: &[String]) -> elf::R<()> {
     let (mut entry, mut map_file, mut output, mut inputs) = ("__start".to_string(), None, "a.out".to_string(), vec![]);
     let mut lcf: Option<String> = None;
     let mut partial = false;
+    let mut strip_partial = false;
     let mut args: Vec<String> = args.to_vec();
     let mut expanded: Vec<String> = vec![];
     // `@file` holds more arguments, one per line (or space separated)
@@ -50,7 +51,8 @@ fn run(args: &[String]) -> elf::R<()> {
             "-map" => map_file = Some(value()?),
             "-o" => output = value()?,
             "-lcf" => lcf = Some(value()?),
-            "-r" => partial = true,
+            "-r" | "-r1" => partial = true,
+            "-strip_partial" => strip_partial = true,
             "-fp" | "-sdata" | "-sdata2" => {
                 value()?;
             }
@@ -66,6 +68,7 @@ fn run(args: &[String]) -> elf::R<()> {
     };
     let mut plan = plan;
     plan.partial = partial;
+    plan.strip_partial = strip_partial;
     let mut linked = link::Link::new(&entry, &inputs, &plan)?;
     let lay = layout::Layout::new(&mut linked, &plan)?;
     let image = writer::build(&linked, &lay)?;
