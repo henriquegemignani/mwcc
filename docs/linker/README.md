@@ -81,10 +81,12 @@ per symbol with an alignment column and the owning object), then `Memory map:`, 
 ## The oracle and the replica
 
 The real linker runs on this machine, so it is the test oracle. `tools/mwld.py` is a replica of a link with no linker
-command file, and `tools/linker_oracle.py LINKER_DIR OUT --runtime DIR` links nine small programs with both and
-compares the ELF files (`tools/elfdiff.py`) and the link maps. All nine are byte-identical, both ELF and map: dead
+command file, and `tools/linker_oracle.py LINKER_DIR OUT --runtime DIR` links eleven small programs with both and
+compares the ELF files (`tools/elfdiff.py`) and the link maps. All eleven are byte-identical, both ELF and map: dead
 code, two units, `-sdata 0` and `-sdata 64` data, per-symbol alignment, floats and switch tables, pointer data, C++
-with exceptions and RTTI, and an archive made by the real linker's `-library`. `tools/elf.py` reads the objects.
+with exceptions and RTTI, an archive made by the real linker's `-library`, an object compiled with `-pragma "cats off"`,
+and an object from the 1.3.2 compiler (`.comment` version 10). Every program is compiled by a Metrowerks compiler
+and linked with the same two MSL runtime objects (Echoes') as `__init_cpp_exceptions` and `global_destructor_chain`. `tools/elf.py` reads the objects.
 
 What the real linker does, as found by those links:
 
@@ -111,7 +113,9 @@ What the real linker does, as found by those links:
   has value 0), the kept locals; then the four section symbols of the linker's own pieces, all the globals in object
   order, and `_ctors`, `_ctors$99`, `_dtors`, `_dtors$99`, `_eti_init_info`. `st_other` is cleared. The relocations of
   the objects that have a `.mwcats.text` are kept, sorted by address, with the address and symbol index of the output
-  (`.rela.text`, `.relaextabindex`, `.rela.data`...); `.mwcats.text` itself is rebuilt for the kept functions.
+  (`.rela.text`, `.relaextabindex`, `.rela.data`...); `.mwcats.text` itself is rebuilt for the kept functions. The
+  rule is the section: an object compiled with `-pragma "cats off"` (as Echoes' runtime is) has no `.mwcats.text`
+  and none of its relocations are kept, though the compiler and linker are the same.
   Sections: the loadable ones, `.rela*`, `.mwcats.text`, `.symtab`, `.shstrtab`, `.strtab` in the file in the order
   `.shstrtab`, `.strtab`, `.symtab`, relocations, `.mwcats.text`, with the section header table at the next multiple
   of 16.
@@ -122,10 +126,10 @@ What the real linker does, as found by those links:
 
 What it does not know (the replica stops, or is untested): a linker command file, `-opt_partial` and the other partial
 links, `-sym` and DWARF merging, `-romaddr`, overlays, `-mapunused`/`-listclosure`, multiply-defined and other error
-messages (it prints only the first undefined symbol), a library search (`-l`, `MWLibraries`), objects whose `.comment`
-version is not 0x0b (1.3.2's objects link differently: the `.ctors` go to `.rodata` with a warning, and the retained
-relocations differ), and which objects have their relocations kept (the rule above fits every test; the real one may
-be the compiler version). The one linker in the tests is the project's 2.7 one.
+messages (it prints only the first undefined symbol), and a library search (`-l`, `MWLibraries`). Objects with no
+`.comment` section, such as `mwasmeppc.exe`'s, are refused: one linked differently (the real linker kept less of the
+runtime, and ordered the symbols by another rule) and its alignments and flags are unknown. The tests use the 2.7
+linker, the 2.7 and 1.3.2 compilers, and the same two runtime objects, so that is the scope of "byte-identical".
 
 ## Next
 

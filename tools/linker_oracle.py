@@ -7,8 +7,10 @@ MSL runtime's `__init_cpp_exceptions` and `global_destructor_chain` objects (--r
 `__register_fragment` and `__unregister_fragment` are stubbed here. Each program is built by the compiler, linked by both
 linkers, and every difference is listed. The exit status is 1 when any program differs.
 
-Each scenario is a set of C or C++ sources, compiler flags, and whether one object goes in an archive made by the real
-linker's `-library`."""
+Each scenario is a set of C or C++ sources and compiler flags, and optionally: an archive made by the real linker's
+`-library` of some of the objects, extra flags for one file, and an older compiler (a sibling of LINKER_DIR, such as 1.3.2,
+whose objects have another `.comment` version; the linker stays 2.7). Every scenario here is compiled by a Metrowerks
+compiler of that kind and linked with the same two MSL runtime objects."""
 import argparse
 import subprocess
 import sys
@@ -65,6 +67,11 @@ SCENARIOS = {
                                  "struct B: A{ int f(){return 2;} };\nA ga; B gb;\nint use(A*a){ return a->f(); }\n"
                                  'extern "C" void _start(void){ try{ use(&gb);}catch(...){} }\n',
                         "stub2.cpp": STUB_CPP}, ["-Cpp_exceptions", "on", "-RTTI", "on"]),
+    "cats-off": ({"a.c": "extern int fb(int); int g=5; int fa(int x){ return fb(x)+g; }\nvoid _start(void){ fa(1); }\n",
+                  "b.c": "extern int g; int bb; int fb(int x){ bb+=x; return bb+g; }\n"},
+                 {"file_flags": {"b.c": ["-pragma", "cats off"]}}),
+    "compiler-1.3.2": ({"a.c": "int g=5;int h;\nint unused(int x){return x*2;}\nint f(int x){return x+g+h;}\n"
+                               "void _start(void){f(1);}\n"}, {"compiler": "1.3.2"}),
     "archive": ({"a.c": "extern int fb(int); int fa(int x){ return fb(x)+1; }\nvoid _start(void){ fa(1); }\n",
                  "b.c": "int fb(int x){ static int cnt; cnt+=x; return cnt; }\n",
                  "extra.c": "int unusedfn(int x){ return x*9; }\n"}, "archive:b.c,extra.c"),
@@ -87,6 +94,9 @@ def compare(oracle_elf, mine_elf, oracle_map, mine_map):
 
 def scenario(name, linker_dir, out_root, runtime):
     sources, flags = SCENARIOS[name]
+    options = flags if isinstance(flags, dict) else {}
+    compiler = linker_dir.parent / options["compiler"] if "compiler" in options else linker_dir
+    flags = [] if isinstance(flags, dict) else flags
     out = out_root / name
     out.mkdir(parents=True, exist_ok=True)
     sources = {**sources, "stub.c": STUB}
@@ -94,8 +104,9 @@ def scenario(name, linker_dir, out_root, runtime):
     for file, text in sources.items():
         (out / file).write_text(text)
         obj = out / (file.rsplit(".", 1)[0] + ".o")
-        code, log = run(linker_dir / "mwcceppc.exe", "-c", "-proc", "gekko",
-                        *(flags if isinstance(flags, list) else []), out / file, "-o", obj)
+        code, log = run(compiler / "mwcceppc.exe", "-c", "-proc", "gekko",
+                        *(flags if isinstance(flags, list) else []), *options.get("file_flags", {}).get(file, []),
+                        out / file, "-o", obj)
         if code:
             return [f"compile of {file} failed:\n{log}"]
         objects[file] = obj

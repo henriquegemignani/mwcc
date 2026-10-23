@@ -98,9 +98,8 @@ def load_object(name, data, archive=""):
     for i in range(len(e.symbols) if comment else 0):
         if 52 + 8 * i <= len(comment.data):
             aligns[i], _, flags[i], _ = struct.unpack_from(">IBBH", comment.data, 44 + 8 * i)
-    if comment and comment.data[11] != 0x0B:
-        fail(f"{name}: comment section version {comment.data[11]} (the linker treats objects of other versions "
-             "differently, as 1.3.2's: not replicated)")
+    if comment is None:
+        fail(f"{name}: no .comment section (assembler output?); the symbols' alignments and flags are not known")
     obj = Obj(name, e, aligns, flags, archive)
     for section in e.sections:
         if not section.flags & 2 or section.type not in (1, 8):
