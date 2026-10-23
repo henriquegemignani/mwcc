@@ -26,6 +26,7 @@ fn run(args: &[String]) -> elf::R<()> {
     let (mut entry, mut map_file, mut output, mut inputs) = ("__start".to_string(), None, "a.out".to_string(), vec![]);
     let mut lcf: Option<String> = None;
     let mut partial = false;
+    let mut generate = false;
     let mut strip_partial = false;
     let mut args: Vec<String> = args.to_vec();
     let mut expanded: Vec<String> = vec![];
@@ -51,7 +52,11 @@ fn run(args: &[String]) -> elf::R<()> {
             "-map" => map_file = Some(value()?),
             "-o" => output = value()?,
             "-lcf" => lcf = Some(value()?),
-            "-r" | "-r1" => partial = true,
+            "-r" => partial = true,
+            "-r1" => {
+                partial = true;
+                generate = true;
+            }
             "-strip_partial" => strip_partial = true,
             "-fp" | "-sdata" | "-sdata2" => {
                 value()?;
@@ -62,13 +67,18 @@ fn run(args: &[String]) -> elf::R<()> {
         }
         i += 1;
     }
-    let plan = match lcf {
+    if strip_partial && !generate {
+        return Err("-strip_partial only has an effect with -r1 here".into());
+    }
+    // (a plain `-r` link ignores the command file)
+    let plan = match lcf.filter(|_| !partial || generate) {
         Some(path) => layout::Plan::from_lcf(lcf::parse(&read_text(&path)?)?)?,
         None => layout::Plan::default_plan(),
     };
     let mut plan = plan;
     plan.partial = partial;
     plan.strip_partial = strip_partial;
+    plan.generate = generate;
     let mut linked = link::Link::new(&entry, &inputs, &plan)?;
     let lay = layout::Layout::new(&mut linked, &plan)?;
     let image = writer::build(&linked, &lay)?;

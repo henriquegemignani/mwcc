@@ -210,7 +210,7 @@ DarkSamus and ScriptGui differ in the ELF (open).
 * **Symbol table.** An undefined symbol is listed where the first object using it is.
 * **`>>> SYMBOL NOT FOUND` order (map header).** A depth-first walk of the live code: roots are the entry then the
   `FORCEACTIVE` names in order; forced names no object defines come first; leftover live atoms follow in reverse index
-  order. Known gaps from the Opus review: `-r1` and `-r` are not told apart, `-r` with `-lcf` should ignore the file, `_eti_init_info` always goes to `extabindex` (breaks when bodies merge it into `.data`), and a live `.dtors$10` without `__destroy_global_chain` panics; none occurs in the 86 modules. The last rule is not exact (ChozoGhost and 13 others differ); the walk's order for those leftovers is unknown.
+  order. Fixed from the Opus review: `-r1` alone generates the markers and `_eti_init_info`, plain `-r` ignores `-lcf` and rejects `-strip_partial`, and a live `.dtors$10` without `__destroy_global_chain` lists it as undefined. Still open there: `_eti_init_info` always goes to `extabindex` (breaks when bodies merge it into `.data`), sections the LCF does not place are dropped instead of rerouted, `.mwcats.text` is not carried in partial links, and some `.dtors$15` cases of objects with exception tables differ; none occurs in the 86 modules. The last rule is not exact (ChozoGhost and 13 others differ); the walk's order for those leftovers is unknown.
 * The map omits "Linker generated symbols" in a partial link.
 
 ## Next

@@ -358,6 +358,13 @@ fn partial_symbol_table(link: &Link, lay: &Layout) -> SymbolTable {
             }
         }
     }
+    // (the destructor chain's reference the linker repeats needs the chain, even when no object defines or names it)
+    if generated.iter().any(|(_, p)| p.name == ".dtors$10") && !link.defs.contains_key("__destroy_global_chain")
+        && !undefined.contains_key("__destroy_global_chain") {
+        undefined.insert("__destroy_global_chain".into(), entries.len());
+        entries.push(Ent { name: "__destroy_global_chain".into(), value: 0, size: 0, info: (STB_GLOBAL << 4), shndx: 0 });
+        comment.push(entry(1));
+    }
     for &(i, piece) in &generated {
         for g in &piece.gen {
             undefined.entry(g.name.clone()).or_insert(entries.len());    // (code that refers to a generated symbol)
@@ -430,7 +437,8 @@ fn write_init_info(lay: &Layout, data: &mut [Vec<u8>]) {
 /// `_eti_init_info`: the extabindex start and end, then the code range its entries cover.
 fn write_eti_info(lay: &Layout, data: &mut [Vec<u8>]) {
     let ex = oi("extabindex");
-    let at = (lay.gen_addr("_eti_init_info").unwrap() - lay.addr[ex]) as usize;      // (the entries come first)
+    let Some(addr) = lay.gen_addr("_eti_init_info") else { return };
+    let at = (addr - lay.addr[ex]) as usize;      // (the entries come first)
     let start = lay.addr[ex];
     let (mut lo, mut hi) = (None::<u32>, 0u32);
     for i in 0..at / 12 {
@@ -548,8 +556,12 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
         }
         // (the destructor chain's reference the linker repeats refers to the chain)
         for piece in lay.pieces[i].iter().filter(|p| link.partial && p.obj.is_none() && p.name == ".dtors$10") {
-            let (fo, fs) = link.defs["__destroy_global_chain"];
-            push32(&mut bytes, &[piece.start, ((new_index[fo][&fs] as u32) << 8) | R_PPC_ADDR32 as u32, 0]);
+            let idx = match link.defs.get("__destroy_global_chain") {
+                Some(&(fo, fs)) => new_index[fo].get(&fs),
+                None => undefined.get("__destroy_global_chain"),
+            };
+            let idx = *idx.ok_or("no output symbol for '__destroy_global_chain'")?;
+            push32(&mut bytes, &[piece.start, ((idx as u32) << 8) | R_PPC_ADDR32 as u32, 0]);
         }
         rela_pos.push(pos);
         pos += bytes.len() as u32;

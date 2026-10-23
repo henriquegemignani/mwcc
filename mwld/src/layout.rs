@@ -47,13 +47,14 @@ pub struct Plan {
     pub lcf: bool,
     pub partial: bool,
     pub strip_partial: bool,
+    pub generate: bool,                 // `-r1`: a partial link that also generates the markers and the exception table info
     pub force_active: Vec<String>,
 }
 
 impl Plan {
     pub fn default_plan() -> Plan {
         Plan { origin: BASE, seq: (0..ORDER.len()).filter(|&i| ORDER[i] != ".stack").map(|i| (i, None)).collect(),
-               assigns: vec![], lcf: false, partial: false, strip_partial: false, force_active: vec![] }
+               assigns: vec![], lcf: false, partial: false, strip_partial: false, generate: false, force_active: vec![] }
     }
 
     /// The output sections a linker command file does not place (none without one, or without `-r`).
@@ -79,7 +80,7 @@ impl Plan {
         crate::link::set_bodies(&lcf.bodies);
         // (a file without MEMORY places nothing: its output is a partial link, where every address is zero)
         let origin = if lcf.memory { lcf.origin.ok_or("linker command file: the first MEMORY region has no origin")? } else { 0 };
-        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, partial: false, strip_partial: false, force_active: lcf.force_active })
+        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, partial: false, strip_partial: false, generate: false, force_active: lcf.force_active })
     }
 }
 
@@ -172,7 +173,7 @@ impl Layout {
             if name == ".bss" {
                 found.sort_by_key(|p| p.obj.zip(p.sec.as_ref()).map_or(false, |(o, s)| link.objs[o].elf.sections[s.index].synthetic));
             }
-            if plan.partial && !plan.lcf {
+            if plan.partial && !plan.generate {
                 pieces.push(found);
                 continue;
             }
