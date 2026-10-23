@@ -137,12 +137,10 @@ fn gen_piece(name: &str, gen: Vec<GenSymbol>) -> Piece {
 impl Layout {
     pub fn new(link: &mut Link, plan: &Plan) -> R<Layout> {
         let mut pieces: Vec<Vec<Piece>> = vec![];
-        // (in a partial link the markers of both lists appear as soon as either holds something besides the runtime's hooks)
-        let user_ctor_dtor = link.objs.iter().any(|obj| obj.atoms.iter().any(|(&i, ids)| {
-            let name = &obj.elf.sections[i].name;
-            ids.iter().any(|&a| link.atoms[a].live) && matches!(output_name(name), Some(".ctors") | Some(".dtors"))
-                && !(name.ends_with("$10") || name.ends_with("$15"))
-        }));
+        // (in a partial link the markers of both lists appear as soon as live code refers to `_ctors` or `_dtors`)
+        let user_ctor_dtor = (0..link.atoms.len()).filter(|&a| link.atoms[a].live).any(|a| {
+            link.relocs(a).iter().any(|r| matches!(link.objs[link.atoms[a].obj].sym(r.sym).name.as_str(), "_ctors" | "_dtors"))
+        });
         for name in ORDER {
             let mut found = vec![];
             for (o, obj) in link.objs.iter().enumerate() {
