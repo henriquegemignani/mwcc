@@ -10,6 +10,7 @@ pub const ORDER: [&str; 21] = [
     ".PPC.EMB.sbss0", ".bss"];
 const NOBITS: [&str; 4] = [".sbss", ".sbss2", ".PPC.EMB.sbss0", ".bss"];
 const ACTIVE: u8 = 0x10;
+const FORCE_ACTIVE: u8 = 0x08;     // `#pragma force_active`: the symbol's own atom is kept
 const RUNTIME_ROOTS: [&str; 3] =
     ["__init_cpp_exceptions_reference", "__fini_cpp_exceptions_reference", "__destroy_global_chain_reference"];
 const LINKER_SYMBOLS: [&str; 15] = [
@@ -42,6 +43,7 @@ pub struct Atom {
     pub align: u32,
     pub symbols: Vec<usize>,
     pub forced: bool,
+    pub root: bool,
     pub live: bool,
     pub out_offset: u32,
     pub addr: u32,
@@ -178,7 +180,7 @@ impl Link {
             let mut sized: Vec<&Symbol> =
                 here.iter().copied().filter(|s| (s.typ == 1 || s.typ == 2) && s.size > 0).collect();
             let new = |start, size, align, symbols, forced| Atom {
-                obj: obj_index, sec: section.index, start, size, align, symbols, forced, live: false, out_offset: 0,
+                obj: obj_index, sec: section.index, start, size, align, symbols, forced, root: false, live: false, out_offset: 0,
                 addr: 0 };
             let mut list: Vec<Atom> = vec![];
             if sized.is_empty() || here.iter().any(|s| flags[s.index] & ACTIVE != 0) {
@@ -196,6 +198,9 @@ impl Link {
                         owner.symbols.push(s.index);
                     }
                 }
+            }
+            for atom in list.iter_mut() {
+                atom.root = atom.symbols.iter().any(|&s| flags[s] & FORCE_ACTIVE != 0);
             }
             let ids = list.into_iter().map(|a| { self.atoms.push(a); self.atoms.len() - 1 }).collect();
             atoms.insert(section.index, ids);
@@ -267,7 +272,7 @@ impl Link {
             for ids in obj.atoms.values() {
                 for &a in ids {
                     let atom = &self.atoms[a];
-                    if atom.forced {
+                    if atom.forced || atom.root {
                         mark(&mut self.atoms, &mut work, a);
                     }
                 }

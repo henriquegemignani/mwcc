@@ -130,7 +130,10 @@ impl Layout {
         let mut pos = hdr;
         for i in 0..n {
             if !lay.nonempty.contains(&i) {
-                lay.map_off[i] = pos;
+                // (an empty section is aligned for the input sections there were, even when all of them were stripped)
+                let widest = link.objs.iter().flat_map(|o| o.elf.sections.iter())
+                    .filter(|s| s.flags & 2 != 0 && output_name(&s.name) == Some(ORDER[i])).map(|s| s.align).max().unwrap_or(1);
+                lay.map_off[i] = align(pos, widest);
             } else {
                 pos = align(pos, lay.align[i]);
                 lay.map_off[i] = pos;
