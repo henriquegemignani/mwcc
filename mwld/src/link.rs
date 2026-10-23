@@ -132,6 +132,9 @@ pub struct Link {
     pub rom_ref: bool,      // some live code refers to `_rom_copy_info` or `_bss_init_info`
     pub partial: bool,                  // `-r`: relocatable output, nothing is stripped unless `-strip_partial`
     pub strip_partial: bool,
+    /// The names nothing defines, in the order the linker comes across them when it walks the code from its roots, each with
+    /// the object whose code named it first (none for a name a command file keeps active).
+    pub not_found: Vec<(String, Option<usize>)>,
     pub linker_refs: HashSet<String>,   // the symbols live code takes from the linker
     pub force_active: Vec<String>,  // symbols a linker command file keeps (FORCEACTIVE)
     pub assigned: HashSet<String>,  // symbols a linker command file defines
@@ -159,7 +162,7 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial, linker_refs: HashSet::new(),
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial, not_found: vec![], linker_refs: HashSet::new(),
                                 referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
                                 assigned: plan.assigns.iter().map(|a| a.0.clone()).collect() };
@@ -348,6 +351,60 @@ impl Link {
         }
     }
 
+    /// Walks the live code depth first from the entry point and the forced symbols, in order, to find what is not defined.
+    fn discover(&mut self) {
+        let mut seen = vec![false; self.atoms.len()];
+        let mut names: HashSet<String> = HashSet::new();
+        let roots: Vec<String> = std::iter::once(self.entry.clone()).chain(self.force_active.iter().cloned()).collect();
+        let mut stack: Vec<(usize, Vec<Rela>, usize)> = vec![];
+        let starts = roots.iter().map(|n| Some(n.clone())).chain(std::iter::once(None)).collect::<Vec<_>>();
+        for start in starts {
+            let mut first: Vec<usize> = vec![];
+            match start {
+                Some(name) => {
+                    let found = self.defs.get(&name).copied()
+                        .or_else(|| self.objs.iter().enumerate().find_map(|(o, obj)| obj.locals.get(&name).map(|&s| (o, s))));
+                    match found.and_then(|(o, s)| self.target(o, s, 0)) {
+                        Some((a, _)) => first.push(a),
+                        None => {
+                            if found.is_none() && names.insert(name.clone()) {
+                                self.not_found.push((name, None));
+                            }
+                        }
+                    }
+                }
+                None => first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live)),    // (the last ones marked come first)
+            }
+            for a in first {
+                if seen[a] || !self.atoms[a].live {
+                    continue;
+                }
+                seen[a] = true;
+                stack.push((a, self.relocs(a), 0));
+                while let Some((cur, relocs, i)) = stack.last_mut() {
+                    let Some(r) = relocs.get(*i).cloned() else {
+                        stack.pop();
+                        continue;
+                    };
+                    *i += 1;
+                    let obj = self.atoms[*cur].obj;
+                    if let Some((t, _)) = self.target(obj, r.sym, r.addend) {
+                        if !seen[t] && self.atoms[t].live {
+                            seen[t] = true;
+                            let rel = self.relocs(t);
+                            stack.push((t, rel, 0));
+                        }
+                    } else {
+                        let sym = self.objs[obj].sym(r.sym);
+                        if sym.shndx == 0 && !self.defs.contains_key(&sym.name) && names.insert(sym.name.clone()) {
+                            self.not_found.push((sym.name.clone(), Some(obj)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn strip(&mut self) -> R<()> {
         if self.partial && !self.strip_partial {
             self.atoms.iter_mut().for_each(|a| a.live = true);
@@ -369,6 +426,7 @@ impl Link {
                     self.atoms[a].live = false;
                 }
             }
+            self.discover();
             self.record_references();
             return Ok(());
         }
@@ -465,6 +523,9 @@ impl Link {
                     _ => {}
                 }
             }
+        }
+        if self.partial {
+            self.discover();
         }
         self.record_references();
         self.referenced.extend(self.defs.get(&self.entry).copied());

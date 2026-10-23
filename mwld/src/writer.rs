@@ -333,10 +333,17 @@ fn partial_symbol_table(link: &Link, lay: &Layout) -> SymbolTable {
     }
     let first_global = entries.len();
     let mut undefined = HashMap::new();
+    // (an undefined symbol is listed where an object with live code that refers to it names it)
+    let mut used: Vec<HashSet<usize>> = vec![HashSet::new(); link.objs.len()];
+    for a in (0..link.atoms.len()).filter(|&a| link.atoms[a].live) {
+        used[link.atoms[a].obj].extend(link.relocs(a).iter().map(|r| r.sym));
+    }
     for (o, obj) in link.objs.iter().enumerate() {
         for s in obj.elf.symbols.iter().filter(|s| s.bind >= STB_GLOBAL && !s.name.is_empty() && s.typ != STT_FILE) {
             if s.shndx == 0 {
-                if !link.defs.contains_key(&s.name) && !undefined.contains_key(&s.name)
+                let owner = link.not_found.iter().find(|(n, _)| *n == s.name).map(|(_, o)| *o);
+                if owner.map_or(used[o].contains(&s.index), |first| first == Some(o))
+                    && !link.defs.contains_key(&s.name) && !undefined.contains_key(&s.name)
                     && !generated.iter().any(|(_, p)| p.gen.iter().any(|g| g.name == s.name)) {
                     undefined.insert(s.name.clone(), entries.len());
                     entries.push(Ent { name: s.name.clone(), value: 0, size: 0, info: (s.bind << 4) | s.typ, shndx: 0 });

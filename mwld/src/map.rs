@@ -55,23 +55,11 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
 pub fn write_map(link: &Link, lay: &Layout) -> String {
     let mut out = format!("Link map of {}\n", link.entry);
     if link.partial {
-        // the symbols nothing defines (the real linker lists them in an order of its own; this is the symbol tables')
-        let mut seen = std::collections::HashSet::new();
-        for obj in &link.objs {
-            for s in obj.elf.symbols.iter().filter(|s| s.shndx == 0 && !s.name.is_empty() && !link.defs.contains_key(&s.name)
-                && !lay.pieces.iter().flatten().any(|p| p.gen.iter().any(|g| g.name == s.name))) {
-                if seen.insert(s.name.clone()) {
-                    out.push_str(&format!(">>> SYMBOL NOT FOUND: {}\n", s.name));
-                }
-            }
-        }
-        // (so are the names a linker command file keeps active that no object defines)
+        // the names nothing defines, in the order the linker came across them
         let generated = |name: &str| lay.pieces.iter().flatten().any(|p| p.gen.iter().any(|g| g.name == name));
-        for name in &link.force_active {
-            let defined = link.defs.contains_key(name) || link.objs.iter().any(|obj| obj.locals.contains_key(name));
-            if !defined && !generated(name) && seen.insert(name.clone()) {
-                out.push_str(&format!(">>> SYMBOL NOT FOUND: {name}\n"));
-            }
+        for (name, _) in link.not_found.iter().filter(|(name, _)| !generated(name)) {
+            out.push_str(&format!(">>> SYMBOL NOT FOUND: {name}
+"));
         }
     }
     for &i in &lay.seq {
