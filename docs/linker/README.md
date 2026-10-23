@@ -193,29 +193,46 @@ before tokenizing). `-fp`, `-nodefaults`, `-sdata`, `-sdata2`, `-g`, `-mapunused
 
 The game's REL modules are linked twice (`build.ninja`): `.preplf` is `-sdata 0 -sdata2 0 -r` on the module's objects, and
 `.plf` is `-sdata 0 -sdata2 0 -r1 -lcf <module>/ldscript.lcf -m _prolog -strip_partial` on the objects plus
-`REL_Setup.o` (and usually `global_destructor_chain.o`). Both need the objects in the order of `build.ninja`.
-`tools/lcf_oracle.py --cwd <echoes> ...` runs them. Of the 86 modules, 75 `.preplf` ELFs (the rest are open; the
-plain `-r` map has no entry point to compare) and 69 `.plf` links are byte-identical in ELF and map; 14 more have an identical ELF and differ only in the map's `SYMBOL NOT FOUND` order, and
-DarkSamus and ScriptGui differ in the ELF (open).
+`REL_Setup.o` (and usually `global_destructor_chain.o`), in the order of `build.ninja`. `tools/rel_oracle.py` runs
+all of them against the real linker (`--step plf|preplf`). **All 86 `.plf` links are byte-identical in ELF and map.** Of
+the `.preplf` links, 75 ELFs are identical; the other 11 (DarkSamus, DigitalGuardian, GeomBlobV2, Grenchler, GunTurret,
+Ing, IngBoostBallGuardian, Metroid, ScriptGui, Splitter, Sporb) differ in the order of undefined symbols in the symbol
+table, and no `.preplf` map is identical (nothing but `.plf` feeds the REL, so these are open). The plain `-r` walk order
+is not worked out; neither "reverse atom order without descending" nor "last user owns the name" fits.
 
 * **`-r` / `-r1`** make an ET_REL file: addresses are 0, every relocation is kept (symbol indices remapped), a
-  rebuilt `.comment` is written, and nothing is stripped (unreferenced globals and locals stay). `-strip_partial` applies the normal reachability strip (roots: the entry and `FORCEACTIVE`, locals too) with
-  undefined-symbol errors turned off.
+  rebuilt `.comment` is written, and nothing is stripped (unreferenced globals and locals stay). Only `-r1` generates
+  the `.ctors`/`.dtors` markers and `_eti_init_info`; plain `-r` ignores `-lcf` and `-strip_partial` is rejected
+  without `-r1`. `-strip_partial` applies the normal reachability strip (roots: the entry and `FORCEACTIVE`, locals
+  too) with undefined-symbol errors turned off.
 * **LCF section bodies.** `.data : { *(.data) *(extabindex) *(extab) }` merges those input sections into the output
-  section. A command file without `MEMORY` means origin 0. Sections the file does not place are dropped with their atoms here (the real linker instead reroutes them to another output and warns, which is not replicated).
+  section. A command file without `MEMORY` means origin 0. In a partial link an output the file does not place is
+  listed after the file's sections (empty) when an object has input for it, and live atoms of it are dropped here (the
+  real linker reroutes them to another output with a warning, which is not replicated).
 * **Generated markers.** When live code refers to `_ctors` or `_dtors`, `.ctors$00/$99` and `.dtors$00/$99` pieces are
-  generated (a `.dtors$10` piece, `__destroy_global_chain_reference`, gets a relocation to `__destroy_global_chain`).
-  They have section symbols after the locals and global symbols at the end of the symtab; `.comment` header byte 15 is 3
-  and their entries have alignment 4.
-* **Symbol table.** An undefined symbol is listed where the first object using it is.
-* **`>>> SYMBOL NOT FOUND` order (map header).** A depth-first walk of the live code: roots are the entry then the
-  `FORCEACTIVE` names in order; forced names no object defines come first; leftover live atoms follow in reverse index
-  order. Fixed from the Opus review: `-r1` alone generates the markers and `_eti_init_info`, plain `-r` ignores `-lcf` and rejects `-strip_partial`, and a live `.dtors$10` without `__destroy_global_chain` lists it as undefined. Still open there: `_eti_init_info` always goes to `extabindex` (breaks when bodies merge it into `.data`), sections the LCF does not place are dropped instead of rerouted, `.mwcats.text` is not carried in partial links, and some `.dtors$15` cases of objects with exception tables differ; none occurs in the 86 modules. The last rule is not exact (ChozoGhost and 13 others differ); the walk's order for those leftovers is unknown.
+  generated (a `.dtors$10` piece, `__destroy_global_chain_reference`, gets a relocation to `__destroy_global_chain`,
+  which is listed as undefined when nothing defines it). They have section symbols after the locals and global symbols
+  at the end of the symtab; `.comment` header byte 15 is 3 and their entries have alignment 4.
+* **Symbol table.** An undefined symbol is listed where the first object that discovers it (see below) uses it.
+* **`>>> SYMBOL NOT FOUND` order (map header) and the undefined-symbol order.** One walk, which decides both:
+  1. A forced name no *global* definition has comes first of all (a forced *local*, such as a `__sinit_X_cpp`, is
+     a root and still listed).
+  2. Roots in order: the entry, then the `FORCEACTIVE` names. From each root the walk goes depth first through
+     the atoms it refers to; the relocations of an atom are followed in order of their offset (not the order of the
+     object's relocation table), and an undefined name is listed when its relocation is reached.
+  3. Then the leftover live atoms start walks: code atoms in reverse index order, then the other atoms (data) in index
+     order, then the `.ctors`/`.dtors` atoms. An atom that code or data names through a *local* symbol is not a leftover
+     root (it is reached through its user), whereas one named through a global symbol is.
 * The map omits "Linker generated symbols" in a partial link.
+
+Known gaps (none occur in the 86 `.plf` links): `_eti_init_info` always goes to `extabindex` (breaks when bodies
+merge it into `.data`), `.mwcats.text` is not carried in partial links, some `.dtors$15` cases of objects with
+exception tables differ, and partial relocations keep their original addend (wrong for section-symbol relocations
+into a section with dead atoms).
 
 ## Next
 
-1. The residuals above: the leftover-phase `SYMBOL NOT FOUND` order, and the DarkSamus/ScriptGui ELF differences.
+1. The plain `-r` walk order (the 11 `.preplf` ELFs and all `.preplf` maps).
 2. `-opt_partial`.
 3. Port the hook generator.
 4. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the

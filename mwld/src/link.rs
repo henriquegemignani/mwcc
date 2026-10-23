@@ -371,7 +371,9 @@ impl Link {
     fn discover(&mut self) {
         let mut seen = vec![false; self.atoms.len()];
         let mut names: HashSet<String> = HashSet::new();
-        let roots: Vec<String> = std::iter::once(self.entry.clone()).chain(self.force_active.iter().cloned()).collect();
+        // (a plain `-r` link has no entry point to start from)
+        let entry = (self.strip_partial).then(|| self.entry.clone());
+        let roots: Vec<String> = entry.into_iter().chain(self.force_active.iter().cloned()).collect();
         let mut stack: Vec<(usize, Vec<Rela>, usize)> = vec![];
         // (a forced name no object has comes first of all)
         for name in &roots {
