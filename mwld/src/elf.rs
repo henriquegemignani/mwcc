@@ -1,6 +1,36 @@
 //! Big-endian ELF32 relocatable files and `!<arch>` archives, read into plain structures.
 pub type R<T> = Result<T, String>;
 
+// ELF section types and flags, symbol bindings, types and special indices, and the PowerPC relocation types used.
+pub const SHT_PROGBITS: u32 = 1;
+pub const SHT_SYMTAB: u32 = 2;
+pub const SHT_RELA: u32 = 4;
+pub const SHT_NOBITS: u32 = 8;
+pub const SHT_STRTAB: u32 = 3;
+pub const SHF_ALLOC: u32 = 2;
+pub const STB_LOCAL: u8 = 0;
+pub const STB_GLOBAL: u8 = 1;
+pub const STB_WEAK: u8 = 2;
+pub const STT_OBJECT: u8 = 1;
+pub const STT_FUNC: u8 = 2;
+pub const STT_SECTION: u8 = 3;
+pub const STT_FILE: u8 = 4;
+pub const SHN_ABS: u16 = 0xFFF1;
+pub const SHN_LORESERVE: u16 = 0xFF00;
+pub const SHN_COMMON: u16 = 0xFFF2;
+pub const PT_LOAD: u32 = 1;
+pub const ET_EXEC: u16 = 2;
+pub const EM_PPC: u16 = 20;
+pub const EF_PPC_EMB: u32 = 0x80000000;
+pub const R_PPC_ADDR32: u8 = 1;
+pub const R_PPC_ADDR16: u8 = 3;
+pub const R_PPC_ADDR16_LO: u8 = 4;
+pub const R_PPC_ADDR16_HI: u8 = 5;
+pub const R_PPC_ADDR16_HA: u8 = 6;
+pub const R_PPC_REL24: u8 = 10;
+pub const R_PPC_REL14: u8 = 11;
+pub const R_PPC_EMB_SDA21: u8 = 109;
+
 pub struct Section {
     pub index: usize,
     pub name: String,
@@ -22,6 +52,7 @@ pub struct Symbol {
     pub shndx: u16,
 }
 
+#[derive(Clone)]
 pub struct Rela {
     pub offset: u32,
     pub sym: usize,
@@ -64,7 +95,7 @@ impl ElfFile {
     /// The relocations (SHT_RELA) that apply to the section `index`, in file order.
     pub fn relocs(&self, index: usize) -> Vec<Rela> {
         let mut out = vec![];
-        for rela in self.sections.iter().filter(|s| s.typ == 4 && s.info as usize == index) {
+        for rela in self.sections.iter().filter(|s| s.typ == SHT_RELA && s.info as usize == index) {
             for off in (0..rela.data.len() / 12 * 12).step_by(12) {
                 let info = be32(&rela.data, off + 4);
                 out.push(Rela { offset: be32(&rela.data, off), sym: (info >> 8) as usize, kind: info as u8,
@@ -90,7 +121,7 @@ pub fn parse(raw: &[u8], path: &str) -> R<ElfFile> {
         }
         let (name, typ, flags, offset, size) =
             (be32(raw, at), be32(raw, at + 4), be32(raw, at + 8), be32(raw, at + 16) as usize, be32(raw, at + 20));
-        let data = if typ == 8 { vec![] } else {
+        let data = if typ == SHT_NOBITS { vec![] } else {
             raw.get(offset..offset + size as usize).ok_or(format!("{path}: section data out of range"))?.to_vec()
         };
         names.push(name);
@@ -104,7 +135,7 @@ pub fn parse(raw: &[u8], path: &str) -> R<ElfFile> {
         }
     }
     let mut symbols = vec![];
-    for s in sections.iter().filter(|s| s.typ == 2) {
+    for s in sections.iter().filter(|s| s.typ == SHT_SYMTAB) {
         let strings = &sections[be32(raw, shoff + s.index * shentsize + 24) as usize].data;
         symbols.clear();
         for i in 0..s.data.len() / 16 {

@@ -1,4 +1,5 @@
 //! The default (no linker command file) layout: output sections from the base address in a fixed order.
+use crate::elf::{SHF_ALLOC, STT_FUNC};
 use crate::link::{align, is_nobits, output_name, Link, BASE, ORDER};
 use std::collections::HashMap;
 
@@ -11,6 +12,18 @@ pub struct SecInfo {
     pub flags: u32,
 }
 
+/// A symbol the linker defines inside one of its own pieces.
+pub struct GenSymbol {
+    pub name: String,
+    pub offset: u32,
+    pub size: u32,
+    pub typ: u8,
+}
+
+fn gen_symbol(name: impl Into<String>, offset: u32, size: u32, typ: u8) -> GenSymbol {
+    GenSymbol { name: name.into(), offset, size, typ }
+}
+
 /// What an output section holds from one input section (or the linker's own).
 pub struct Piece {
     pub name: String,
@@ -20,7 +33,7 @@ pub struct Piece {
     pub start: u32,
     pub size: u32,                              // as the map shows it
     pub addr: u32,
-    pub gen: Vec<(String, u32, u32, u8)>,       // (symbol name, offset, size, type) of a linker-generated piece
+    pub gen: Vec<GenSymbol>,                    // the symbols of a linker-generated piece
 }
 
 pub struct Layout {
@@ -31,7 +44,7 @@ pub struct Layout {
     pub fills: Vec<Vec<(u32, u32, u32)>>,       // (offset, size, alignment) of the padding before a piece
     pub nonempty: Vec<usize>,
     pub hdr: u32,
-    pub map_off: Vec<u32>,
+    pub file_off: Vec<u32>,
     pub sda: u32,
     pub sda2: u32,
     pub symbols: Vec<(String, u32)>,
@@ -54,14 +67,14 @@ pub fn is_section_symbol(name: &str) -> bool {
 /// The widest alignment among the input sections that go to an output section, even those stripped.
 fn widest_input_align(link: &Link, output: &str) -> u32 {
     link.objs.iter().flat_map(|o| o.elf.sections.iter())
-        .filter(|s| s.flags & 2 != 0 && output_name(&s.name) == Some(output)).map(|s| s.align).max().unwrap_or(1)
+        .filter(|s| s.flags & SHF_ALLOC != 0 && output_name(&s.name) == Some(output)).map(|s| s.align).max().unwrap_or(1)
 }
 
 pub fn oi(name: &str) -> usize {
     ORDER.iter().position(|&n| n == name).unwrap()
 }
 
-fn gen_piece(name: &str, gen: Vec<(String, u32, u32, u8)>) -> Piece {
+fn gen_piece(name: &str, gen: Vec<GenSymbol>) -> Piece {
     Piece { name: name.into(), obj: None, sec: None, atoms: vec![], start: 0, size: 0, addr: 0, gen }
 }
 
@@ -87,18 +100,18 @@ impl Layout {
             // exception table index has its 32-byte info when one is live, and an empty `_eti_init_info` when only
             // code refers to it.
             let hooks = |p: &Piece| p.name.ends_with("$10") || p.name.ends_with("$15");
-            if (name == ".ctors" || name == ".dtors") && (link.eh || found.iter().any(|p| !hooks(p))) {
+            if name == ".ctors" || name == ".dtors" {
                 found.sort_by_key(|p| (p.name == name, p.name.clone()));    // (an unsuffixed one follows the suffixed)
+            }
+            if (name == ".ctors" || name == ".dtors") && (link.eh || found.iter().any(|p| !hooks(p))) {
                 let sym = format!("_{}", &name[1..]);
-                found.insert(0, gen_piece(&format!("{name}$00"), vec![(sym.clone(), 0, 0, 0)]));
-                found.push(gen_piece(&format!("{name}$99"), vec![(format!("{sym}$99"), 0, 4, 1)]));
-            } else if name == ".ctors" || name == ".dtors" {
-                found.sort_by_key(|p| (p.name == name, p.name.clone()));
+                found.insert(0, gen_piece(&format!("{name}$00"), vec![gen_symbol(sym.clone(), 0, 0, 0)]));
+                found.push(gen_piece(&format!("{name}$99"), vec![gen_symbol(format!("{sym}$99"), 0, 4, 1)]));
             }
             if name == "extabindex" && link.eh {
-                found.push(gen_piece("extabindex", vec![("_eti_init_info".into(), 0, 32, 1)]));
+                found.push(gen_piece("extabindex", vec![gen_symbol("_eti_init_info", 0, 32, 1)]));
             } else if name == "extabindex" && link.eti_ref {
-                found.push(gen_piece("extabindex", vec![("_eti_init_info".into(), 0, 0, 1)]));
+                found.push(gen_piece("extabindex", vec![gen_symbol("_eti_init_info", 0, 0, 1)]));
             }
             pieces.push(found);
         }
@@ -107,7 +120,7 @@ impl Layout {
             (0..n).filter(|&i| pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty())).collect();
         let hdr = align(52 + 32 * nonempty.len() as u32, 16);
         let mut lay = Layout { pieces, addr: vec![0; n], size: vec![0; n], align: vec![1; n], fills: vec![vec![]; n],
-                               nonempty, hdr, map_off: vec![0; n], sda: 0, sda2: 0, symbols: vec![],
+                               nonempty, hdr, file_off: vec![0; n], sda: 0, sda2: 0, symbols: vec![],
                                sym_map: HashMap::new() };
         let mut cur = BASE;
         for i in 0..n {
@@ -138,8 +151,9 @@ impl Layout {
                     atom.addr = cur + offset;
                     offset += atom.size;
                 }
-                offset += piece.gen.iter().map(|g| g.2).sum::<u32>();
-                piece.size = piece.sec.as_ref().map_or_else(|| piece.gen.iter().map(|g| g.2).sum(), |s| s.size);
+                let gen_size: u32 = piece.gen.iter().map(|g| g.size).sum();
+                offset += gen_size;
+                piece.size = piece.sec.as_ref().map_or(gen_size, |s| s.size);
             }
             offset = align(offset, 4);
             lay.size[i] = offset;
@@ -150,10 +164,10 @@ impl Layout {
         for i in 0..n {
             if !lay.nonempty.contains(&i) {
                 // (an empty section is aligned for the input sections there were, even when all of them were stripped)
-                lay.map_off[i] = align(pos, widest_input_align(link, ORDER[i]));
+                lay.file_off[i] = align(pos, widest_input_align(link, ORDER[i]));
             } else {
                 pos = align(pos, lay.align[i]);
-                lay.map_off[i] = pos;
+                lay.file_off[i] = pos;
                 if !is_nobits(ORDER[i]) {
                     pos += lay.size[i];
                 }
@@ -167,8 +181,8 @@ impl Layout {
 
     pub fn gen_addr(&self, symbol: &str) -> Option<u32> {
         // (an empty `_eti_init_info`, there only because code refers to it, is at address 0)
-        self.pieces.iter().flatten().find_map(|p| p.gen.iter().find(|g| g.0 == symbol)
-            .map(|g| if g.2 == 0 && symbol == "_eti_init_info" { 0 } else { p.addr + g.1 }))
+        self.pieces.iter().flatten().find_map(|p| p.gen.iter().find(|g| g.name == symbol)
+            .map(|g| if g.size == 0 && symbol == "_eti_init_info" { 0 } else { p.addr + g.offset }))
     }
 
     fn generated_symbols(&mut self, link: &Link) {
@@ -184,7 +198,7 @@ impl Layout {
             syms.push((end, e));
         }
         let functions = link.objs.iter().flat_map(|o| o.atoms.values().flatten())
-            .filter(|&&a| link.atoms[a].live && link.atoms[a].symbols.iter().any(|&s| link.objs[link.atoms[a].obj].sym(s).typ == 2))
+            .filter(|&&a| link.atoms[a].live && link.atoms[a].symbols.iter().any(|&s| link.objs[link.atoms[a].obj].sym(s).typ == STT_FUNC))
             .count() as u32;
         syms.extend([("_stack_addr", 0x3DFFF0), ("_stack_end", 0x3CFFF0), ("_heap_addr", 0x2CFFF0), ("_heap_end", 0x3CFFF0),
                      ("_nbfunctions", functions), ("SIZEOF_HEADERS", self.hdr), ("_SDA_BASE_", self.sda),

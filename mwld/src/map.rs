@@ -1,4 +1,5 @@
 //! The link map file.
+use crate::elf::STB_LOCAL;
 use crate::layout::{oi, Layout, Piece};
 use crate::link::{Link, ORDER};
 
@@ -25,7 +26,7 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
         let atom = &link.atoms[a];
         for &s in atom.symbols.iter().filter(|&&s| {
             let sym = obj.sym(s);
-            sym.size > 0 || sym.bind == 0 || link.referenced.contains(&(o, s))
+            sym.size > 0 || sym.bind == STB_LOCAL || link.referenced.contains(&(o, s))
         }) {
             let sym = obj.sym(s);
             let owner = if atom.whole_section { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
@@ -39,7 +40,7 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
     items.iter().map(|(off, _, s, owner, end)| {
         let (off, s) = (*off, *s);
         let sym = obj.sym(s);
-        let fo = file_off.unwrap_or(lay.map_off[i] + end.unwrap_or(off));
+        let fo = file_off.unwrap_or(lay.file_off[i] + end.unwrap_or(off));
         if sym.size == 0 {
             format!("  {off:08x} {:06x} {:08x} {fo:08x}    {} (entry of {}) \t{}\n", 0, lay.addr[i] + off, sym.name,
                     owner, obj.label())
@@ -66,13 +67,13 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
             let fill = lay.fills[i].iter().find(|f| f.0 + f.1 == piece.start && piece.sec.is_some());
             if let Some(f) = fill {
                 out.push_str(&format!("  {:08x} {:06x} {:08x} {:08x} {:2} *fill*\n", f.0, f.1, lay.addr[i] + piece.start,
-                                      lay.map_off[i] + piece.start, f.2));
+                                      lay.file_off[i] + piece.start, f.2));
             }
             let who = owner(link, piece);
-            out.push_str(&row(piece.start, piece.size, piece.addr, lay.map_off[i] + piece.start, 1, &piece.name, &who));
-            for (sym, off, size, _) in &piece.gen {
-                out.push_str(&row(piece.start + off, *size, piece.addr + off, lay.map_off[i] + piece.start + off, 4, sym,
-                                  &who));
+            out.push_str(&row(piece.start, piece.size, piece.addr, lay.file_off[i] + piece.start, 1, &piece.name, &who));
+            for g in &piece.gen {
+                out.push_str(&row(piece.start + g.offset, g.size, piece.addr + g.offset,
+                                  lay.file_off[i] + piece.start + g.offset, 4, &g.name, &who));
             }
             out.extend(symbol_rows(link, lay, i, piece, None));
         }
@@ -81,18 +82,18 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
     if link.eh {
         section_head(&mut out, "extabindex");
         let ex = oi("extabindex");
-        let end_off = lay.map_off[ex] + lay.size[ex];
+        let end_off = lay.file_off[ex] + lay.size[ex];
         for piece in &lay.pieces[ex] {
             out.extend(symbol_rows(link, lay, ex, piece, Some(end_off)));
             let who = owner(link, piece);
-            for (sym, off, size, _) in &piece.gen {
-                out.push_str(&row(piece.start + off, *size, piece.addr + off, end_off, 4, sym, &who));
+            for g in &piece.gen {
+                out.push_str(&row(piece.start + g.offset, g.size, piece.addr + g.offset, end_off, 4, &g.name, &who));
             }
         }
     }
     out.push_str("\n\nMemory map:\n                   Starting Size     File\n                   address           Offset\n");
     for (i, name) in ORDER.iter().enumerate() {
-        out.push_str(&format!("  {:>15}  {:08x} {:08x} {:08x}\n", name, lay.addr[i], lay.size[i], lay.map_off[i]));
+        out.push_str(&format!("  {:>15}  {:08x} {:08x} {:08x}\n", name, lay.addr[i], lay.size[i], lay.file_off[i]));
     }
     out.push_str("\n\nLinker generated symbols:\n");
     for (sym, value) in &lay.symbols {

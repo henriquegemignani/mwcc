@@ -1,5 +1,5 @@
 //! Loading objects and archives, cutting sections into atoms, resolving symbols and dead stripping.
-use crate::elf::{self, be32, ElfFile, Symbol, R};
+use crate::elf::{self, *};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
@@ -20,10 +20,8 @@ const LINKER_SYMBOLS: [&str; 15] = [
     "_SDA_BASE_", "_SDA2_BASE_", "_ABS_SDA_BASE_", "_ABS_SDA2_BASE_", "_stack_addr", "_stack_end", "_heap_addr",
     "_heap_end", "_nbfunctions", "SIZEOF_HEADERS", "_eti_init_info", "_ctors", "_ctors$99", "_dtors", "_dtors$99"];
 
-const SHN_COMMON: u16 = 0xFFF2;
-
 fn sized(s: &Symbol) -> bool {
-    (s.typ == 1 || s.typ == 2) && s.size > 0
+    (s.typ == STT_OBJECT || s.typ == STT_FUNC) && s.size > 0
 }
 
 pub fn align(value: u32, to: u32) -> u32 {
@@ -75,6 +73,7 @@ pub struct Obj {
     pub archive: String,
     pub atoms: BTreeMap<usize, Vec<usize>>,      // section index -> atoms
     pub lost: HashSet<usize>,                    // weak definitions another object overrides
+    pub relocs: HashMap<usize, Vec<Rela>>,       // section index -> the relocations that apply to it
 }
 
 impl Obj {
@@ -92,13 +91,6 @@ impl Obj {
     }
 }
 
-pub struct Rel {
-    pub offset: u32,
-    pub sym: usize,
-    pub kind: u8,
-    pub addend: i32,
-}
-
 pub struct Link {
     pub entry: String,
     pub objs: Vec<Obj>,
@@ -110,7 +102,7 @@ pub struct Link {
 }
 
 pub fn defined(s: &Symbol) -> bool {
-    s.bind >= 1 && 0 < s.shndx && s.shndx < 0xFF00
+    s.bind >= STB_GLOBAL && 0 < s.shndx && s.shndx < SHN_LORESERVE
 }
 
 fn linker_error(lines: &[String]) -> String {
@@ -149,7 +141,7 @@ impl Link {
         loop {
             link.resolve();
             let mut wanted: HashSet<String> = link.objs.iter().flat_map(|o| o.elf.symbols.iter())
-                .filter(|s| s.shndx == 0 && s.bind >= 1 && !s.name.is_empty()).map(|s| s.name.clone()).collect();
+                .filter(|s| s.shndx == 0 && s.bind >= STB_GLOBAL && !s.name.is_empty()).map(|s| s.name.clone()).collect();
             wanted.insert(link.entry.clone());
             wanted.extend(ARCHIVE_PULLS.iter().map(|s| s.to_string()));
             wanted.retain(|n| !link.defs.contains_key(n));
@@ -182,16 +174,16 @@ impl Link {
         let obj_index = self.objs.len();
         let mut atoms: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         for section in &e.sections {
-            if section.flags & 2 == 0 || (section.typ != 1 && section.typ != 8) {
+            if section.flags & SHF_ALLOC == 0 || (section.typ != SHT_PROGBITS && section.typ != SHT_NOBITS) {
                 continue;
             }
             if output_name(&section.name).is_none() {
                 return Err(format!("unsupported input section '{}' in {name}", section.name));
             }
             let here: Vec<&Symbol> =
-                e.symbols.iter().filter(|s| s.shndx as usize == section.index && s.typ != 3).collect();
+                e.symbols.iter().filter(|s| s.shndx as usize == section.index && s.typ != STT_SECTION).collect();
             let mut sized: Vec<&Symbol> =
-                here.iter().copied().filter(|s| (s.typ == 1 || s.typ == 2) && s.size > 0).collect();
+                here.iter().copied().filter(|s| (s.typ == STT_OBJECT || s.typ == STT_FUNC) && s.size > 0).collect();
             let new = |start, size, align, symbols, whole_section| Atom {
                 obj: obj_index, sec: section.index, start, size, align, symbols, whole_section, root: false, live: false, out_offset: 0,
                 addr: 0 };
@@ -218,7 +210,8 @@ impl Link {
             let ids = list.into_iter().map(|a| { self.atoms.push(a); self.atoms.len() - 1 }).collect();
             atoms.insert(section.index, ids);
         }
-        self.objs.push(Obj { name: name.into(), elf: e, aligns, archive: archive.into(), atoms, lost: HashSet::new() });
+        let relocs = e.sections.iter().filter(|s| s.flags & SHF_ALLOC != 0).map(|s| (s.index, e.relocs(s.index))).collect();
+        self.objs.push(Obj { name: name.into(), elf: e, aligns, archive: archive.into(), atoms, lost: HashSet::new(), relocs });
         Ok(())
     }
 
@@ -228,7 +221,7 @@ impl Link {
             for s in obj.elf.symbols.iter().filter(|s| defined(s) && !s.name.is_empty()) {
                 let replace = match self.defs.get(&s.name) {
                     None => true,
-                    Some(&(po, ps)) => self.objs[po].elf.symbols[ps].bind == 2 && s.bind == 1,
+                    Some(&(po, ps)) => self.objs[po].elf.symbols[ps].bind == STB_WEAK && s.bind == STB_GLOBAL,
                 };
                 if replace {
                     self.defs.insert(s.name.clone(), (o, s.index));
@@ -245,29 +238,39 @@ impl Link {
     /// The (object, symbol) a symbol of `obj` stands for, or None for a linker symbol.
     pub fn lookup(&self, obj: usize, sym: usize) -> Option<(usize, usize)> {
         let s = self.objs[obj].sym(sym);
-        if s.shndx == 0 || (s.bind >= 1 && self.objs[obj].lost.contains(&sym)) {
+        if s.shndx == 0 || (s.bind >= STB_GLOBAL && self.objs[obj].lost.contains(&sym)) {
             self.defs.get(&s.name).copied()
         } else {
             Some((obj, sym))
         }
     }
 
+    /// The atom a defined symbol of object `o` lies in.
+    pub fn atom_of(&self, o: usize, s: &Symbol) -> Option<&Atom> {
+        self.objs[o].atoms.get(&(s.shndx as usize))?.iter().map(|&a| &self.atoms[a]).find(|a| a.contains(s.value))
+    }
+
+    /// Whether a defined symbol of object `o` goes to the output symbol table: it is not overridden, and a global without
+    /// a size (such as the `_savefpr_N` entry points inside `__save_fpr`) stays only if code refers to it.
+    pub fn emits_symbol(&self, o: usize, s: &Symbol) -> bool {
+        defined(s) && !self.objs[o].lost.contains(&s.index) && (s.size > 0 || self.referenced.contains(&(o, s.index)))
+    }
+
     /// The (atom, offset in its section) a relocation against symbol + addend reaches.
     pub fn target(&self, obj: usize, sym: usize, addend: i32) -> Option<(usize, u32)> {
         let (o, si) = self.lookup(obj, sym)?;
         let s = self.objs[o].sym(si);
-        if s.shndx >= 0xFF00 {
+        if s.shndx >= SHN_LORESERVE {
             return None;
         }
-        let offset = if s.typ == 3 { s.value.wrapping_add(addend as u32) } else { s.value };
+        let offset = if s.typ == STT_SECTION { s.value.wrapping_add(addend as u32) } else { s.value };
         self.objs[o].atoms.get(&(s.shndx as usize))?.iter()
             .find(|&&a| self.atoms[a].contains(offset)).map(|&a| (a, offset))
     }
 
-    pub fn relocs(&self, atom: usize) -> Vec<Rel> {
+    pub fn relocs(&self, atom: usize) -> Vec<Rela> {
         let a = &self.atoms[atom];
-        self.objs[a.obj].elf.relocs(a.sec).into_iter().filter(|r| a.contains(r.offset))
-            .map(|r| Rel { offset: r.offset, sym: r.sym, kind: r.kind, addend: r.addend }).collect()
+        self.objs[a.obj].relocs.get(&a.sec).into_iter().flatten().filter(|r| a.contains(r.offset)).cloned().collect()
     }
 
     pub fn section_name(&self, atom: usize) -> &str {
@@ -301,7 +304,7 @@ impl Link {
                         continue;
                     }
                     let s = self.objs[obj].sym(r.sym);
-                    if s.shndx == 0 && !self.defs.contains_key(&s.name) && s.bind != 2
+                    if s.shndx == 0 && !self.defs.contains_key(&s.name) && s.bind != STB_WEAK
                         && !LINKER_SYMBOLS.contains(&s.name.as_str()) && !crate::layout::is_section_symbol(&s.name) {
                         let from = self.atoms[a].symbols.first().map_or(self.section_name(a), |&s| &self.objs[obj].sym(s).name);
                         return Err(linker_error(&[format!("#   undefined: '{}'", s.name),

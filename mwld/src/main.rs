@@ -37,8 +37,8 @@ fn run(args: &[String]) -> elf::R<()> {
     }
     let mut linked = link::Link::new(&entry, &inputs)?;
     let lay = layout::Layout::new(&mut linked);
-    let out = writer::build(&linked, &lay)?;
-    std::fs::write(&output, out.image).map_err(|e| format!("{output}: {e}"))?;
+    let image = writer::build(&linked, &lay)?;
+    std::fs::write(&output, image).map_err(|e| format!("{output}: {e}"))?;
     if let Some(path) = map_file {
         std::fs::write(&path, elf::to_latin1(&map::write_map(&linked, &lay))).map_err(|e| format!("{path}: {e}"))?;
     }
