@@ -387,7 +387,10 @@ impl Link {
         let roots: Vec<String> = std::iter::once(self.entry.clone()).chain(STRIP_ROOTS.map(String::from))
             .chain(self.force_active.iter().cloned()).collect();
         for name in &roots {
-            if let Some(&(o, s)) = self.defs.get(name) {
+            // (a local symbol of any object can be named too)
+            let found = self.defs.get(name).copied()
+                .or_else(|| self.objs.iter().enumerate().find_map(|(o, obj)| obj.locals.get(name).map(|&s| (o, s))));
+            if let Some((o, s)) = found {
                 let (a, _) = self.target(o, s, 0).ok_or(format!("no code for '{name}'"))?;
                 mark(&mut self.atoms, &mut work, a);
             }

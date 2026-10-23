@@ -65,6 +65,14 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
                 }
             }
         }
+        // (so are the names a linker command file keeps active that no object defines)
+        let generated = |name: &str| lay.pieces.iter().flatten().any(|p| p.gen.iter().any(|g| g.name == name));
+        for name in &link.force_active {
+            let defined = link.defs.contains_key(name) || link.objs.iter().any(|obj| obj.locals.contains_key(name));
+            if !defined && !generated(name) && seen.insert(name.clone()) {
+                out.push_str(&format!(">>> SYMBOL NOT FOUND: {name}\n"));
+            }
+        }
     }
     for &i in &lay.seq {
         let name = ORDER[i];

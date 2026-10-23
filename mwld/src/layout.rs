@@ -247,8 +247,8 @@ impl Layout {
                 }
                 let gen_size: u32 = piece.gen.iter().map(|g| g.size).sum();
                 offset += gen_size;
-                // (in a partial link a section whose trailing atoms were dropped ends where the last live one does)
-                piece.size = piece.sec.as_ref().map_or(gen_size, |s| if plan.partial { s.size.min(offset - piece.start) } else { s.size });
+                // (a `-r` link without stripping shows a section whose trailing atoms were dropped as ending where the last live one does)
+                piece.size = piece.sec.as_ref().map_or(gen_size, |s| if plan.partial && !plan.strip_partial { s.size.min(offset - piece.start) } else { s.size });
             }
             offset = align(offset, 4);
             lay.size[i] = offset;
