@@ -405,7 +405,11 @@ impl Link {
                     }
                     first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live && !referenced[a]));
                     // (the constructor and destructor lists come after the code and data)
-                    first.sort_by_key(|&a| matches!(output_name(self.section_name(a)), Some(".ctors" | ".dtors")));
+                    first.sort_by_key(|&a| match output_name(self.section_name(a)) {
+                        Some(".ctors" | ".dtors") => (2, 0),
+                        Some(".text" | ".init") => (0, -(a as i64)),
+                        _ => (1, a as i64),
+                    });
                     first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live && referenced[a]));
                 }    // (the last ones marked come first)
             }
