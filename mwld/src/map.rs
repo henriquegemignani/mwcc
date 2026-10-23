@@ -31,7 +31,7 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
             let sym = obj.sym(s);
             let owner = if atom.whole_section { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
             // (the file offset of a symbol without size inside an atom is where the atom ends, and the row follows the
-            // sized symbol at the same address; the `...data.0` mark at the start of a whole section is the exception)
+            // sized symbol at the same address; a `...` mark at the start of a whole section is the exception)
             let inside = sym.size == 0 && (sym.value > atom.start || !atom.whole_section);
             let class = if sym.size > 0 { 1 } else if inside { 2 } else { 0 };
             items.push((atom.out_offset + sym.value - atom.start, class, s, owner,

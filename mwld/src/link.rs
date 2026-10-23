@@ -106,7 +106,7 @@ pub struct Link {
     pub eh: bool,           // some exception table (extabindex) is live
     pub eti_ref: bool,      // some live code refers to `_eti_init_info`
     pub rom_ref: bool,      // some live code refers to `_rom_copy_info` or `_bss_init_info`
-    pub linker_refs: Vec<String>,   // the symbols live code takes from the linker, in order of first use
+    pub linker_refs: HashSet<String>,   // the symbols live code takes from the linker
     pub force_active: Vec<String>,  // symbols a linker command file keeps (FORCEACTIVE)
     pub assigned: HashSet<String>,  // symbols a linker command file defines
     pub referenced: HashSet<(usize, usize)>,    // the (object, symbol) pairs live code refers to
@@ -133,7 +133,8 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, linker_refs: vec![], referenced: HashSet::new(),
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, linker_refs: HashSet::new(),
+                                referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
                                 assigned: plan.assigns.iter().map(|a| a.0.clone()).collect() };
         let mut archives: Vec<Vec<Member>> = vec![];
@@ -214,7 +215,7 @@ impl Link {
                 obj: obj_index, sec: section.index, start, size, align, symbols, whole_section, root: false, live: false, out_offset: 0,
                 addr: 0 };
             let mut list: Vec<Atom> = vec![];
-            // (a `...data.0` symbol marks the start of the section as a whole, which then lives or dies together)
+            // (a compiler mark such as `...data.0`, any symbol named `...`, makes the section one atom that lives or dies together)
             if sized.is_empty() || here.iter().any(|s| flags[s.index] & ACTIVE != 0 || s.name.starts_with("...")) {
                 list.push(new(0, section.size, section.align, here.iter().map(|s| s.index).collect(), true));
             } else {
@@ -383,7 +384,6 @@ impl Link {
         }
         let live = |a: &&Atom| a.live;
         self.eh = self.atoms.iter().filter(live).any(|a| self.objs[a.obj].elf.sections[a.sec].name == "extabindex");
-        let mut seen: HashSet<String> = HashSet::new();
         for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
             for r in self.relocs(a) {
                 let obj = self.atoms[a].obj;
@@ -395,7 +395,9 @@ impl Link {
                     "_eti_init_info" => self.eti_ref = true,
                     "_rom_copy_info" | "_bss_init_info" => self.rom_ref = true,
                     "_ctors" | "_ctors$99" | "_dtors" | "_dtors$99" => {}
-                    name if seen.insert(name.to_string()) && s.bind != STB_WEAK => self.linker_refs.push(name.to_string()),
+                    _ if s.bind != STB_WEAK => {
+                        self.linker_refs.insert(s.name.clone());
+                    }
                     _ => {}
                 }
             }

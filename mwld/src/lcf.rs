@@ -12,7 +12,7 @@ pub enum Expr {
 }
 
 pub struct Lcf {
-    pub origin: u32,
+    pub origin: Option<u32>,
     /// The output sections in order, each with the alignment the file gives it.
     pub sections: Vec<(String, Option<u32>)>,
     /// The symbol assignments, in order.
@@ -163,7 +163,7 @@ fn split_force_active(text: &str) -> R<(String, Vec<String>)> {
 pub fn parse(text: &str) -> R<Lcf> {
     let (text, force_active) = split_force_active(text)?;
     let mut p = Parser { toks: tokens(&text)?, at: 0 };
-    let mut lcf = Lcf { origin: 0, sections: vec![], assigns: vec![], force_active };
+    let mut lcf = Lcf { origin: None, sections: vec![], assigns: vec![], force_active };
     while let Some(head) = p.peek().map(String::from) {
         p.at += 1;
         match head.as_str() {
@@ -179,14 +179,13 @@ pub fn parse(text: &str) -> R<Lcf> {
                             p.expect("=")?;
                             let value = number(&p.next()?).ok_or("linker command file: bad number")?;
                             if key == "origin" && first {
-                                lcf.origin = value;
-                                first = false;
+                                lcf.origin = Some(value);
                             }
                         } else if key != "," {
                             return Err(format!("linker command file: unexpected '{key}' in MEMORY"));
                         }
-                        p.eat(",");
                     }
+                    first = false;
                 }
             }
             "SECTIONS" => {

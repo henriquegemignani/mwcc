@@ -1,14 +1,15 @@
 //! mwld [-nostdlib] -m ENTRY [-map FILE] -o OUTPUT INPUT...: a replica of the GC 2.7 linker (mwldeppc.exe, Metrowerks
-//! Linker 3.0.4) for a link with no linker command file. What it knows was found by linking small programs with the
-//! real linker (docs/linker/README.md); it stops with an error on what it does not know: a linker command file,
-//! overlays, partial links, `-sym`, DWARF merging.
+//! Linker 3.0.4), with or without a linker command file (`-lcf`). What it knows was found by linking programs with the
+//! real linker (docs/linker/README.md); it stops with an error on what it does not know: overlays, partial links,
+//! `-sym`, DWARF merging, section bodies in the command file. `-g` and `-mapunused` are accepted and ignored (the
+//! map then has no UNUSED rows).
 //!
 //! * An input section is cut into atoms, one per sized symbol (the symbol's alignment is in the object's `.comment`); a
 //!   section with a symbol the compiler marked active (`...data.0`) is one atom.
 //! * Atoms nothing refers to are dropped. The roots are the entry point, the atoms of symbols marked `force_active`
 //!   and the C++ runtime's init and fini `*_reference` symbols; constructors, destructors and hook sections stay
 //!   only in objects that are otherwise live.
-//! * The output sections go from 0x10000 in the default order, relocations are applied, and the ELF and the link map
+//! * The output sections go from 0x10000 in the default order (or where the command file says), relocations are applied, and the ELF and the link map
 //!   are written.
 mod elf;
 mod layout;
@@ -17,14 +18,23 @@ mod link;
 mod map;
 mod writer;
 
+fn read_text(path: &str) -> elf::R<String> {
+    Ok(elf::latin1(&std::fs::read(path).map_err(|e| format!("{path}: {e}"))?))
+}
+
 fn run(args: &[String]) -> elf::R<()> {
     let (mut entry, mut map_file, mut output, mut inputs) = ("__start".to_string(), None, "a.out".to_string(), vec![]);
     let mut lcf: Option<String> = None;
     let mut args: Vec<String> = args.to_vec();
+    let mut expanded: Vec<String> = vec![];
     // `@file` holds more arguments, one per line (or space separated)
     while let Some(at) = args.iter().position(|a| a.starts_with('@')) {
         let path = args[at][1..].to_string();
-        let text = elf::latin1(&std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?);
+        if expanded.len() >= 64 {
+            return Err(format!("{path}: response files nest too deeply"));
+        }
+        expanded.push(path.clone());
+        let text = read_text(&path)?;
         args.splice(at..=at, text.split_whitespace().map(String::from));
     }
     let mut i = 0;
@@ -49,7 +59,7 @@ fn run(args: &[String]) -> elf::R<()> {
         i += 1;
     }
     let plan = match lcf {
-        Some(path) => layout::Plan::from_lcf(lcf::parse(&elf::latin1(&std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?))?)?,
+        Some(path) => layout::Plan::from_lcf(lcf::parse(&read_text(&path)?)?)?,
         None => layout::Plan::default_plan(),
     };
     let mut linked = link::Link::new(&entry, &inputs, &plan)?;

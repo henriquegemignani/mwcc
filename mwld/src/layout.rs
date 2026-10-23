@@ -1,4 +1,5 @@
-//! The default (no linker command file) layout: output sections from the base address in a fixed order.
+//! The layout: output sections placed in the plan's order (the default fixed order from the base address, or a linker
+//! command file's).
 use crate::elf::{R, SHF_ALLOC, STT_FUNC};
 use crate::lcf::{Expr, Lcf};
 use crate::link::{align, is_nobits, output_name, Link, BASE, ORDER};
@@ -57,9 +58,16 @@ impl Plan {
         let mut seq = vec![];
         for (name, align) in &lcf.sections {
             let i = ORDER.iter().position(|o| o == name).ok_or(format!("linker command file: unknown section '{name}'"))?;
+            if seq.iter().any(|&(j, _)| j == i) {
+                return Err(format!("linker command file: section '{name}' is placed twice"));
+            }
+            if align.map_or(false, |a| !a.is_power_of_two()) {
+                return Err(format!("linker command file: ALIGN of '{name}' is not a power of two"));
+            }
             seq.push((i, *align));
         }
-        Ok(Plan { origin: lcf.origin, seq, assigns: lcf.assigns, lcf: true, force_active: lcf.force_active })
+        let origin = lcf.origin.ok_or("linker command file: the first MEMORY region has no origin")?;
+        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, force_active: lcf.force_active })
     }
 }
 
@@ -81,6 +89,18 @@ pub struct Layout {
     pub sym_map: HashMap<String, u32>,
     /// The symbols each assignment of the linker command file uses.
     pub assign_deps: HashMap<String, Vec<String>>,
+}
+
+fn has_contents(pieces: &[Vec<Piece>], i: usize) -> bool {
+    pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty())
+}
+
+/// The output sections `_rom_copy_info` has an entry for (those with contents, and `.init`), and those `_bss_init_info`
+/// clears (the bss ones with contents), in order.
+pub fn init_info_sections(seq: &[usize], has_contents: impl Fn(usize) -> bool) -> (Vec<usize>, Vec<usize>) {
+    let copied = seq.iter().copied().filter(|&i| !is_nobits(ORDER[i]) && (has_contents(i) || ORDER[i] == ".init")).collect();
+    let cleared = seq.iter().copied().filter(|&i| is_nobits(ORDER[i]) && has_contents(i)).collect();
+    (copied, cleared)
 }
 
 /// The names of the linker's symbols for an output section: its start, the ROM address of its start, its end.
@@ -153,16 +173,15 @@ impl Layout {
         // `_rom_copy_info` and `_bss_init_info`, at the end of `.init` when code refers to them: a (ROM address, address, size)
         // entry for each section with contents, then a (address, size) entry for each bss section, each list ended by zeros
         if link.rom_ref {
-            let used = |i: usize| pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty());
-            let copied = plan.seq.iter().filter(|&&(i, _)| !is_nobits(ORDER[i]) && (used(i) || ORDER[i] == ".init")).count();
-            let cleared = plan.seq.iter().filter(|&&(i, _)| is_nobits(ORDER[i]) && used(i)).count();
-            let (copy_size, bss_size) = (12 * (copied as u32 + 1), 8 * (cleared as u32 + 1));
+            let seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
+            let (copied, cleared) = init_info_sections(&seq, |i| has_contents(&pieces, i));
+            let (copy_size, bss_size) = (12 * (copied.len() as u32 + 1), 8 * (cleared.len() as u32 + 1));
             pieces[oi(".init")].push(gen_piece(".init", vec![gen_symbol("_rom_copy_info", 0, copy_size, 1),
                                                              gen_symbol("_bss_init_info", copy_size, bss_size, 1)]));
         }
         let n = ORDER.len();
         let seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
-        let has_contents = |i: usize| pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty());
+        let has_contents = |i: usize| has_contents(&pieces, i);
         if let Some(i) = (0..n).find(|&i| has_contents(i) && !seq.contains(&i)) {
             return Err(format!("the linker command file does not place the section '{}'", ORDER[i]));
         }
@@ -241,7 +260,9 @@ impl Layout {
         let mut added = vec![];
         for (name, expr) in &plan.assigns {
             let value = expr.eval(&self.sym_map, &sizes)?;
-            expr.names(self.assign_deps.entry(name.clone()).or_default());
+            let deps = self.assign_deps.entry(name.clone()).or_default();
+            deps.clear();
+            expr.names(deps);
             self.sym_map.insert(name.clone(), value);
             match self.symbols.iter_mut().chain(added.iter_mut()).find(|s| s.0 == *name) {
                 Some(slot) => slot.1 = value,

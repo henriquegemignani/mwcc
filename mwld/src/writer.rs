@@ -1,6 +1,6 @@
 //! Section contents, relocations, the symbol table and the output ELF file.
 use crate::elf::*;
-use crate::layout::{oi, section_symbol_names, Layout};
+use crate::layout::{init_info_sections, oi, section_symbol_names, Layout};
 use crate::link::{align, is_nobits, output_name, Link, ORDER};
 use std::collections::{HashMap, HashSet};
 
@@ -311,14 +311,13 @@ fn section_contents(link: &Link, lay: &Layout) -> R<Vec<Vec<u8>>> {
 fn write_init_info(lay: &Layout, data: &mut [Vec<u8>]) {
     let init = oi(".init");
     let at = (lay.gen_addr("_rom_copy_info").unwrap() - lay.addr[init]) as usize;
+    let (copied, cleared) = init_info_sections(&lay.seq, |i| lay.nonempty.contains(&i));
     let (mut copy, mut clear) = (vec![], vec![]);
-    for &i in &lay.seq {
-        let used = lay.nonempty.contains(&i);
-        if !is_nobits(ORDER[i]) && (used || i == init) {
-            push32(&mut copy, &[lay.sym_map[&section_symbol_names(ORDER[i]).1], lay.addr[i], lay.size[i]]);
-        } else if is_nobits(ORDER[i]) && used {
-            push32(&mut clear, &[lay.addr[i], lay.size[i]]);
-        }
+    for i in copied {
+        push32(&mut copy, &[lay.sym_map[&section_symbol_names(ORDER[i]).1], lay.addr[i], lay.size[i]]);
+    }
+    for i in cleared {
+        push32(&mut clear, &[lay.addr[i], lay.size[i]]);
     }
     copy.extend_from_slice(&[0; 12]);
     clear.extend_from_slice(&[0; 8]);

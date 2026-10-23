@@ -80,7 +80,7 @@ per symbol with an alignment column and the owning object), then `Memory map:`, 
 
 ## The oracle and the replica
 
-The real linker runs on this machine, so it is the test oracle. `mwld/` is a Rust crate (`cargo build --release`) that replicates a link with no linker
+The real linker runs on this machine, so it is the test oracle. `mwld/` is a Rust crate (`cargo build --release`) that replicates a link, with or without a linker
 command file (`src/link.rs` loads and strips, `layout.rs` places, `writer.rs` writes the ELF, `map.rs` the map), and `tools/linker_oracle.py LINKER_DIR OUT --runtime DIR [--mwld EXE]` links eleven small programs with both and
 compares the ELF files (`tools/elfdiff.py`, an independent Python reader) and the link maps. All eleven are byte-identical, both ELF and map: dead
 code, two units, `-sdata 0` and `-sdata 64` data, per-symbol alignment, floats and switch tables, pointer data, C++
@@ -149,7 +149,7 @@ add when the runtime's functions are not defined by an object; the replica does 
 those pieces (a link with a constructor but no `__init_cpp_exceptions.o` is not reproduced).
 
 What it does not know (the replica stops, or is untested): `-opt_partial` and the other partial
-links, `-sym` and DWARF merging, `-romaddr`, overlays, `-mapunused`/`-listclosure`, multiply-defined and other error
+links, `-sym` and DWARF merging, `-romaddr`, overlays, `-listclosure`, `-g` and `-mapunused` (accepted and ignored, so the map has no UNUSED rows), multiply-defined and other error
 messages (it prints only the first undefined symbol), and a library search (`-l`, `MWLibraries`). Objects with no
 `.comment` section, such as `mwasmeppc.exe`'s, are refused: one linked differently (the real linker kept less of the
 runtime, and ordered the symbols by another rule) and its alignments and flags are unknown. The tests use the 2.7
