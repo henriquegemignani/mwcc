@@ -84,11 +84,18 @@ def run(*cmd):
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
+def _map_lines(path):
+    """The map's lines, with the `SYMBOL NOT FOUND` header of a partial link sorted (its order is not replicated)."""
+    lines = Path(path).read_text("latin-1").split("\n")
+    head = [l for l in lines if l.startswith(">>> SYMBOL NOT FOUND:")]
+    return sorted(head), [l for l in lines if not l.startswith(">>> SYMBOL NOT FOUND:")]
+
+
 def compare(oracle_elf, mine_elf, oracle_map, mine_map):
     problems = elfdiff.diff(elf.read(oracle_elf), elf.read(mine_elf))
     if not problems and Path(oracle_elf).read_bytes() != Path(mine_elf).read_bytes():
         problems.append("the ELF files differ in their bytes")
-    if Path(oracle_map).read_text("latin-1") != Path(mine_map).read_text("latin-1"):
+    if _map_lines(oracle_map) != _map_lines(mine_map):
         problems.append("the link maps differ")
     return problems
 

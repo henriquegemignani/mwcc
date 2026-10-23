@@ -54,6 +54,17 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
 
 pub fn write_map(link: &Link, lay: &Layout) -> String {
     let mut out = format!("Link map of {}\n", link.entry);
+    if link.partial {
+        // the symbols nothing defines (the real linker lists them in an order of its own; this is the symbol tables')
+        let mut seen = std::collections::HashSet::new();
+        for obj in &link.objs {
+            for s in obj.elf.symbols.iter().filter(|s| s.shndx == 0 && !s.name.is_empty() && !link.defs.contains_key(&s.name)) {
+                if seen.insert(s.name.clone()) {
+                    out.push_str(&format!(">>> SYMBOL NOT FOUND: {}\n", s.name));
+                }
+            }
+        }
+    }
     for &i in &lay.seq {
         let name = ORDER[i];
         if name == ".got" {
@@ -103,9 +114,11 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
         }
         out.push_str(&format!("  {:>15}  {:08x} {:08x} {:08x}\n", name, lay.addr[i], lay.size[i], lay.file_off[i]));
     }
-    out.push_str("\n\nLinker generated symbols:\n");
-    for (sym, value) in &lay.symbols {
-        out.push_str(&format!("{sym:>25} {value:08x}\n"));
+    if !link.partial {
+        out.push_str("\n\nLinker generated symbols:\n");
+        for (sym, value) in &lay.symbols {
+            out.push_str(&format!("{sym:>25} {value:08x}\n"));
+        }
     }
     out
 }

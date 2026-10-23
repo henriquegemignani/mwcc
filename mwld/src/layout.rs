@@ -45,13 +45,14 @@ pub struct Plan {
     pub seq: Vec<(usize, Option<u32>)>,
     pub assigns: Vec<(String, Expr)>,
     pub lcf: bool,
+    pub partial: bool,
     pub force_active: Vec<String>,
 }
 
 impl Plan {
     pub fn default_plan() -> Plan {
         Plan { origin: BASE, seq: (0..ORDER.len()).filter(|&i| ORDER[i] != ".stack").map(|i| (i, None)).collect(),
-               assigns: vec![], lcf: false, force_active: vec![] }
+               assigns: vec![], lcf: false, partial: false, force_active: vec![] }
     }
 
     pub fn from_lcf(lcf: Lcf) -> R<Plan> {
@@ -67,7 +68,7 @@ impl Plan {
             seq.push((i, *align));
         }
         let origin = lcf.origin.ok_or("linker command file: the first MEMORY region has no origin")?;
-        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, force_active: lcf.force_active })
+        Ok(Plan { origin, seq, assigns: lcf.assigns, lcf: true, partial: false, force_active: lcf.force_active })
     }
 }
 
@@ -155,6 +156,10 @@ impl Layout {
             if name == ".bss" {
                 found.sort_by_key(|p| p.obj.zip(p.sec.as_ref()).map_or(false, |(o, s)| link.objs[o].elf.sections[s.index].synthetic));
             }
+            if plan.partial {
+                pieces.push(found);
+                continue;
+            }
             if name == ".ctors" || name == ".dtors" {
                 found.sort_by_key(|p| (p.name == name, p.name.clone()));    // (an unsuffixed one follows the suffixed)
             }
@@ -186,7 +191,7 @@ impl Layout {
             return Err(format!("the linker command file does not place the section '{}'", ORDER[i]));
         }
         let nonempty: Vec<usize> = seq.iter().copied().filter(|&i| has_contents(i)).collect();
-        let hdr = align(52 + 32 * nonempty.len() as u32, 16);
+        let hdr = align(52 + if plan.partial { 0 } else { 32 * nonempty.len() as u32 }, 16);
         let mut forced_align = vec![1; n];
         for &(i, a) in &plan.seq {
             forced_align[i] = a.unwrap_or(1);
@@ -198,12 +203,15 @@ impl Layout {
         for &(i, forced_align) in &plan.seq {
             let name = ORDER[i];
             if !lay.nonempty.contains(&i) {
-                lay.addr[i] = if name.starts_with(".PPC.EMB") { SDA0 } else { cur };
+                lay.addr[i] = if plan.partial { 0 } else if name.starts_with(".PPC.EMB") { SDA0 } else { cur };
                 continue;
             }
             let extra = if matches!(name, ".ctors" | ".dtors" | "extabindex") { 4 } else { 1 };
             lay.align[i] = lay.pieces[i].iter().filter_map(|p| p.sec.as_ref().map(|s| s.align)).max().unwrap_or(0)
                 .max(extra).max(forced_align.unwrap_or(1));
+            if plan.partial {
+                cur = 0;
+            }
             cur = align(cur, lay.align[i]);
             lay.addr[i] = cur;
             let mut offset = 0;
@@ -226,7 +234,8 @@ impl Layout {
                 }
                 let gen_size: u32 = piece.gen.iter().map(|g| g.size).sum();
                 offset += gen_size;
-                piece.size = piece.sec.as_ref().map_or(gen_size, |s| s.size);
+                // (in a partial link a section whose trailing atoms were dropped ends where the last live one does)
+                piece.size = piece.sec.as_ref().map_or(gen_size, |s| if plan.partial { s.size.min(offset - piece.start) } else { s.size });
             }
             offset = align(offset, 4);
             lay.size[i] = offset;

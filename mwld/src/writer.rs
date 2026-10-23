@@ -79,7 +79,7 @@ fn retained_relocs(link: &Link, lay: &Layout) -> Vec<Vec<Retained>> {
     let mut out: Vec<Vec<Retained>> = vec![vec![]; ORDER.len()];
     for &i in &lay.nonempty {
         for piece in &lay.pieces[i] {
-            if piece.obj.map_or(false, |o| link.objs[o].keeps_relocs()) {
+            if piece.obj.map_or(false, |o| link.partial || link.objs[o].keeps_relocs()) {
                 for &a in &piece.atoms {
                     for r in link.relocs(a) {
                         out[i].push((a, r.offset, r.sym, r.kind, r.addend));
@@ -154,6 +154,8 @@ fn apply_relocs(link: &Link, lay: &Layout, data: &mut [Vec<u8>]) -> R<()> {
 /// The output symbol table: every entry, where each object's symbols went, and the index of the first global.
 struct SymbolTable {
     entries: Vec<Ent>,
+    comment: Vec<[u8; 8]>,                      // the `.comment` entry of each symbol, for a partial link
+    undefined: HashMap<String, usize>,          // the index of each undefined symbol, for a partial link
     new_index: Vec<HashMap<usize, usize>>,
     first_global: usize,
 }
@@ -269,10 +271,84 @@ fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> S
         entries.push(Ent { name: "_eti_init_info".into(), value, size, info: (STB_GLOBAL << 4) | STT_OBJECT,
                            shndx: sec_of(oi("extabindex")) });
     }
-    SymbolTable { entries, new_index, first_global }
+    SymbolTable { entries, comment: vec![], undefined: HashMap::new(), new_index, first_global }
+}
+
+/// The symbol table of a partial link: each object's file symbol, section symbols and locals, then the globals of every
+/// object in order, undefined ones where they are first named, each with its `.comment` entry.
+fn partial_symbol_table(link: &Link, lay: &Layout) -> SymbolTable {
+    let mut entries = vec![Ent { name: String::new(), value: 0, size: 0, info: 0, shndx: 0 }];
+    let mut comment = vec![[0u8; 8]];
+    let mut new_index: Vec<HashMap<usize, usize>> = vec![HashMap::new(); link.objs.len()];
+    let entry = |align: u32| {
+        let mut c = [0u8; 8];
+        c[..4].copy_from_slice(&align.to_be_bytes());
+        c
+    };
+    // (the weak marker in the entry's first flag byte is not kept)
+    let kept = |mut c: [u8; 8]| {
+        c[4] = 0;
+        c
+    };
+    for (o, obj) in link.objs.iter().enumerate() {
+        let e = &obj.elf;
+        let live_secs: Vec<usize> =
+            obj.atoms.iter().filter(|(_, ids)| ids.iter().any(|&a| link.atoms[a].live)).map(|(&i, _)| i).collect();
+        let real_sections = e.sections.iter().any(|s| !s.synthetic && live_secs.contains(&s.index));
+        if let Some(file) = e.symbols.iter().find(|s| s.typ == STT_FILE).filter(|_| real_sections) {
+            new_index[o].insert(file.index, entries.len());
+            entries.push(Ent { name: file.name.clone(), value: 0, size: 0, info: STT_FILE, shndx: SHN_ABS });
+            comment.push(entry(1));
+        }
+        for section in e.sections.iter().filter(|s| !s.synthetic && live_secs.contains(&s.index)) {
+            if let Some(sym) = e.symbols.iter().find(|s| s.typ == STT_SECTION && s.shndx as usize == section.index) {
+                new_index[o].insert(sym.index, entries.len());
+            }
+            entries.push(section_symbol(lay, o, section));
+            comment.push(entry(section.align));
+        }
+        for s in &e.symbols {
+            if s.bind == STB_LOCAL && s.typ != STT_SECTION && s.typ != STT_FILE && live_secs.contains(&(s.shndx as usize)) {
+                if let Some(atom) = link.atom_of(o, s).filter(|a| a.live) {
+                    new_index[o].insert(s.index, entries.len());
+                    let out = output_name(&e.sections[s.shndx as usize].name).unwrap();
+                    entries.push(Ent { name: s.name.clone(), value: atom.where_(s.value), size: s.size, info: s.typ,
+                                       shndx: shndx_of(lay, oi(out)) });
+                    comment.push(kept(obj.cmt[s.index]));
+                }
+            }
+        }
+        for section in e.sections.iter().filter(|s| s.synthetic && live_secs.contains(&s.index)) {
+            entries.push(section_symbol(lay, o, section));
+            comment.push(entry(section.align));
+        }
+    }
+    let first_global = entries.len();
+    let mut undefined = HashMap::new();
+    for (o, obj) in link.objs.iter().enumerate() {
+        for s in obj.elf.symbols.iter().filter(|s| s.bind >= STB_GLOBAL && !s.name.is_empty() && s.typ != STT_FILE) {
+            if s.shndx == 0 {
+                if !link.defs.contains_key(&s.name) && !undefined.contains_key(&s.name) {
+                    undefined.insert(s.name.clone(), entries.len());
+                    entries.push(Ent { name: s.name.clone(), value: 0, size: 0, info: (s.bind << 4) | s.typ, shndx: 0 });
+                    comment.push(entry(1));
+                }
+            } else if let Some(atom) = link.atom_of(o, s).filter(|_| !obj.lost.contains(&s.index)) {
+                new_index[o].insert(s.index, entries.len());
+                let out = output_name(&obj.elf.sections[s.shndx as usize].name).unwrap();
+                entries.push(Ent { name: s.name.clone(), value: atom.where_(s.value), size: s.size,
+                                   info: (s.bind << 4) | s.typ, shndx: shndx_of(lay, oi(out)) });
+                comment.push(kept(obj.cmt[s.index]));
+            }
+        }
+    }
+    SymbolTable { entries, comment, undefined, new_index, first_global }
 }
 
 fn entry_address(link: &Link) -> R<u32> {
+    if link.partial {
+        return Ok(0);
+    }
     let (eo, es) = link.defs[&link.entry];
     let sym = link.objs[eo].sym(es);
     let atom = link.atom_of(eo, sym).ok_or("the entry point has no code")?;
@@ -297,7 +373,9 @@ fn section_contents(link: &Link, lay: &Layout) -> R<Vec<Vec<u8>>> {
         }
         data[i] = buf;
     }
-    apply_relocs(link, lay, &mut data)?;
+    if !link.partial {
+        apply_relocs(link, lay, &mut data)?;
+    }
     if link.rom_ref {
         write_init_info(lay, &mut data);
     }
@@ -354,6 +432,15 @@ fn cats_section(link: &Link, cats: &[usize]) -> Vec<u8> {
     out
 }
 
+/// The `.comment` section of a partial link: the linker's header, then an entry for each symbol.
+fn comment_bytes(entries: &[[u8; 8]]) -> Vec<u8> {
+    let mut out = b"CodeWarrior".to_vec();
+    out.extend_from_slice(&[0x0d, 0x03, 0x00, 0x00, 0x02, 0x00, 0x02, 0x00, 0x14, 0x2c]);
+    out.resize(44, 0);
+    entries.iter().for_each(|e| out.extend_from_slice(e));
+    out
+}
+
 /// The `.symtab` and `.strtab` contents.
 fn symtab_bytes(entries: &[Ent]) -> (Vec<u8>, Vec<u8>) {
     let (mut strtab, mut symtab) = (vec![0u8], vec![]);
@@ -374,7 +461,7 @@ fn symtab_bytes(entries: &[Ent]) -> (Vec<u8>, Vec<u8>) {
 pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
     let total = lay.nonempty.len();
     let cats: Vec<usize> =
-        (0..link.objs.len()).filter(|&o| link.objs[o].has_cats() && !cats_entries(link, o).is_empty()).collect();
+        (0..link.objs.len()).filter(|&o| !link.partial && link.objs[o].has_cats() && !cats_entries(link, o).is_empty()).collect();
     let retained = retained_relocs(link, lay);
     let rela_sections: Vec<usize> = lay.nonempty.iter().copied().filter(|&i| !retained[i].is_empty()).collect();
     let has_cats = !cats.is_empty();
@@ -383,11 +470,13 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
     let symtab_shndx = cats_shndx + u16::from(has_cats);
     let (shstrtab_shndx, strtab_shndx) = (symtab_shndx + 1, symtab_shndx + 2);
 
-    let SymbolTable { entries, new_index, first_global } = symbol_table(link, lay, &cats, cats_shndx);
+    let SymbolTable { entries, comment, undefined, new_index, first_global } =
+        if link.partial { partial_symbol_table(link, lay) } else { symbol_table(link, lay, &cats, cats_shndx) };
     let entry_addr = entry_address(link)?;
     let data = section_contents(link, lay)?;
     let cats_data = cats_section(link, &cats);
     let (symtab, strtab) = symtab_bytes(&entries);
+    let comment_data = if link.partial { comment_bytes(&comment) } else { vec![] };
 
     let mut out_secs = vec![];       // (order index, type, flags, entsize)
     let mut pos = lay.hdr;
@@ -404,6 +493,9 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
         all_names.push(".mwcats.text".into());
     }
     all_names.extend([".symtab", ".shstrtab", ".strtab"].map(String::from));
+    if link.partial {
+        all_names.push(".comment".into());
+    }
     let mut shstr = vec![0u8];
     let mut shoffs: HashMap<String, u32> = HashMap::new();
     for n in &all_names {
@@ -421,8 +513,12 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
         let mut bytes = vec![];
         for &(a, r_offset, sym, kind, addend) in &retained[i] {
             let atom = &link.atoms[a];
-            let (fo, fs) = link.lookup(atom.obj, sym).ok_or(format!("no output symbol for '{}'", link.objs[atom.obj].sym(sym).name))?;
-            let idx = *new_index[fo].get(&fs).ok_or(format!("no output symbol for '{}'", link.objs[fo].sym(fs).name))?;
+            let name = &link.objs[atom.obj].sym(sym).name;
+            let idx = match link.lookup(atom.obj, sym) {
+                Some((fo, fs)) => new_index[fo].get(&fs),
+                None => undefined.get(name),
+            };
+            let idx = *idx.ok_or(format!("no output symbol for '{name}'"))?;
             push32(&mut bytes, &[atom.where_(r_offset), ((idx as u32) << 8) | kind as u32, addend as u32]);
         }
         rela_pos.push(pos);
@@ -432,8 +528,10 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
     pos = align(pos, 4);
     let cats_pos = pos;
     pos += cats_data.len() as u32;
+    let comment_pos = pos;
+    pos += comment_data.len() as u32;
     let shoff = align(pos, 16);
-    let n_sections = out_secs.len() + rela_names.len() + 3 + usize::from(has_cats);
+    let n_sections = out_secs.len() + rela_names.len() + 3 + usize::from(has_cats) + usize::from(link.partial);
     let mut image = vec![0u8; shoff as usize + SHDR_SIZE as usize * (n_sections + 1)];
     let mut place = |at: u32, bytes: &[u8]| image[at as usize..at as usize + bytes.len()].copy_from_slice(bytes);
     for &(i, kind, ..) in &out_secs {
@@ -448,6 +546,7 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
         place(*p, bytes);
     }
     place(cats_pos, &cats_data);
+    place(comment_pos, &comment_data);
     let mut sh = vec![SecHeader::default()];
     for &(i, kind, flags, entsize) in &out_secs {
         sh.push(SecHeader { name: shoffs[ORDER[i]], kind, flags, addr: lay.addr[i], off: lay.file_off[i], size: lay.size[i],
@@ -469,21 +568,26 @@ pub fn build(link: &Link, lay: &Layout) -> R<Vec<u8>> {
                         entsize: 1, ..Default::default() });
     sh.push(SecHeader { name: shoffs[".strtab"], kind: SHT_STRTAB, off: strtab_pos, size: strtab.len() as u32, align: 1,
                         entsize: 1, ..Default::default() });
+    if link.partial {
+        sh.push(SecHeader { name: shoffs[".comment"], kind: SHT_PROGBITS, off: comment_pos, size: comment_data.len() as u32,
+                            align: 4, entsize: 1, ..Default::default() });
+    }
     for (k, h) in sh.iter().enumerate() {
         place(shoff + SHDR_SIZE * k as u32, &h.bytes());
     }
     let mut phdrs = vec![];
-    for &(i, kind, flags, _) in &out_secs {
+    for &(i, kind, flags, _) in out_secs.iter().filter(|_| !link.partial) {
         let perm = 4 | if flags & 1 != 0 { 2 } else { 0 } | u32::from(flags & 4 != 0);
         push32(&mut phdrs, &[PT_LOAD, lay.file_off[i], lay.addr[i], 0, if kind == SHT_NOBITS { 0 } else { lay.size[i] },
                              lay.size[i], perm, lay.align[i]]);
     }
     let mut head = b"\x7fELF\x01\x02\x01".to_vec();
     head.extend_from_slice(&[0; 9]);
-    head.extend_from_slice(&ET_EXEC.to_be_bytes());
+    head.extend_from_slice(&(if link.partial { ET_REL } else { ET_EXEC }).to_be_bytes());
     head.extend_from_slice(&EM_PPC.to_be_bytes());
-    push32(&mut head, &[1, entry_addr, EHDR_SIZE, shoff, EF_PPC_EMB]);
-    for v in [EHDR_SIZE as u16, PHDR_SIZE as u16, out_secs.len() as u16, SHDR_SIZE as u16, sh.len() as u16, shstrtab_shndx] {
+    push32(&mut head, &[1, entry_addr, if link.partial { 0 } else { EHDR_SIZE }, shoff, EF_PPC_EMB]);
+    let phnum = if link.partial { 0 } else { out_secs.len() as u16 };
+    for v in [EHDR_SIZE as u16, if link.partial { 0 } else { PHDR_SIZE as u16 }, phnum, SHDR_SIZE as u16, sh.len() as u16, shstrtab_shndx] {
         head.extend_from_slice(&v.to_be_bytes());
     }
     place(0, &head);

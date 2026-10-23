@@ -71,6 +71,7 @@ pub struct Obj {
     pub name: String,
     pub elf: ElfFile,
     pub aligns: Vec<u32>,
+    pub cmt: Vec<[u8; 8]>,                       // each symbol's 8 bytes of the `.comment` section
     pub archive: String,
     pub atoms: BTreeMap<usize, Vec<usize>>,      // section index -> atoms
     pub locals: HashMap<String, usize>,          // the local symbols the object defines, by name
@@ -106,6 +107,7 @@ pub struct Link {
     pub eh: bool,           // some exception table (extabindex) is live
     pub eti_ref: bool,      // some live code refers to `_eti_init_info`
     pub rom_ref: bool,      // some live code refers to `_rom_copy_info` or `_bss_init_info`
+    pub partial: bool,                  // `-r`: relocatable output, nothing is stripped
     pub linker_refs: HashSet<String>,   // the symbols live code takes from the linker
     pub force_active: Vec<String>,  // symbols a linker command file keeps (FORCEACTIVE)
     pub assigned: HashSet<String>,  // symbols a linker command file defines
@@ -133,7 +135,7 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, linker_refs: HashSet::new(),
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, linker_refs: HashSet::new(),
                                 referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
                                 assigned: plan.assigns.iter().map(|a| a.0.clone()).collect() };
@@ -198,6 +200,8 @@ impl Link {
                 flags[i] = comment.data[44 + 8 * i + 5];
             }
         }
+        let cmt = (0..e.symbols.len())
+            .map(|i| comment.data.get(44 + 8 * i..52 + 8 * i).map_or([0; 8], |b| b.try_into().unwrap())).collect();
         let obj_index = self.objs.len();
         let mut atoms: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         for section in &e.sections {
@@ -242,7 +246,7 @@ impl Link {
                                                    && s.typ != STT_SECTION && s.typ != STT_FILE)
             .map(|s| (s.name.clone(), s.index)).collect();
         let relocs = e.sections.iter().filter(|s| s.flags & SHF_ALLOC != 0).map(|s| (s.index, e.relocs(s.index))).collect();
-        self.objs.push(Obj { name: name.into(), elf: e, aligns, archive: archive.into(), atoms, lost: HashSet::new(), relocs, locals });
+        self.objs.push(Obj { name: name.into(), elf: e, aligns, cmt, archive: archive.into(), atoms, lost: HashSet::new(), relocs, locals });
         Ok(())
     }
 
@@ -310,7 +314,40 @@ impl Link {
         &self.objs[a.obj].elf.sections[a.sec].name
     }
 
+    /// Notes the symbols the live code refers to.
+    fn record_references(&mut self) {
+        for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
+            for r in self.relocs(a) {
+                let found = self.lookup(self.atoms[a].obj, r.sym);
+                self.referenced.extend(found);
+            }
+        }
+    }
+
     fn strip(&mut self) -> R<()> {
+        if self.partial {
+            self.atoms.iter_mut().for_each(|a| a.live = true);
+            // (unreferenced global data with sized symbols is dropped even here)
+            let mut used = vec![false; self.atoms.len()];
+            for a in 0..self.atoms.len() {
+                for r in self.relocs(a) {
+                    if let Some((t, _)) = self.target(self.atoms[a].obj, r.sym, r.addend) {
+                        used[t] = true;
+                    }
+                }
+            }
+            for a in 0..self.atoms.len() {
+                let atom = &self.atoms[a];
+                let o = atom.obj;
+                let name = &self.objs[o].elf.sections[atom.sec].name;
+                let data = output_name(name).map_or(false, |n| !matches!(n, ".text" | ".init" | ".ctors" | ".dtors"));
+                if data && !used[a] && !atom.whole_section && atom.symbols.iter().any(|&s| sized(self.objs[o].sym(s))) {
+                    self.atoms[a].live = false;
+                }
+            }
+            self.record_references();
+            return Ok(());
+        }
         if !self.defs.contains_key(&self.entry) {
             return Err(linker_error(&[format!("#   undefined: '{}'", self.entry),
                                       "#   Referenced from <entry point>".into()]));
@@ -402,12 +439,7 @@ impl Link {
                 }
             }
         }
-        for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
-            for r in self.relocs(a) {
-                let found = self.lookup(self.atoms[a].obj, r.sym);
-                self.referenced.extend(found);
-            }
-        }
+        self.record_references();
         self.referenced.extend(self.defs.get(&self.entry).copied());
         if self.eh && !self.defs.contains_key("__init_cpp_exceptions") {
             return Err(linker_error(&["#   undefined: '__init_cpp_exceptions'".into(),

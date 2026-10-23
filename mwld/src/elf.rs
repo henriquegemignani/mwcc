@@ -19,6 +19,7 @@ pub const SHN_ABS: u16 = 0xFFF1;
 pub const SHN_LORESERVE: u16 = 0xFF00;
 pub const SHN_COMMON: u16 = 0xFFF2;
 pub const PT_LOAD: u32 = 1;
+pub const ET_REL: u16 = 1;
 pub const ET_EXEC: u16 = 2;
 pub const EM_PPC: u16 = 20;
 pub const EF_PPC_EMB: u32 = 0x80000000;
