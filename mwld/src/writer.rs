@@ -196,9 +196,11 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
         }
     }
     let first_global = entries.len();
+    // (a global without a size, such as the `_savefpr_N` entry points inside `__save_fpr`, stays only if code refers to it)
     for (o, obj) in link.objs.iter().enumerate() {
         for s in &obj.elf.symbols {
-            if s.bind >= 1 && 0 < s.shndx && s.shndx < 0xFF00 && !obj.lost.contains(&s.index) {
+            if s.bind >= 1 && 0 < s.shndx && s.shndx < 0xFF00 && !obj.lost.contains(&s.index)
+                && (s.size > 0 || link.referenced.contains(&(o, s.index))) {
                 let atom = obj.atoms.get(&(s.shndx as usize)).and_then(|ids| {
                     ids.iter().map(|&a| &link.atoms[a]).find(|a| a.contains(s.value))
                 });

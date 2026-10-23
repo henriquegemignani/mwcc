@@ -94,7 +94,10 @@ What the real linker does, as found by those links:
   dropped and the rest are packed, each at its own alignment. That alignment is in the object's `.comment` section
   (a 44-byte header, then 8 bytes per symbol: alignment, two flag bytes, padding), not in the ELF. A section with a
   symbol whose second flag byte is `0x10` (the compiler's `...data.0`) is kept whole. `.ctors` and `.dtors` atoms
-  are roots, as are the entry and the runtime's `__init_cpp_exceptions_reference` and its two siblings; a weak
+  of an object with anything else live are roots (an object nothing needs is dropped whole, `.ctors$10` hooks
+  included), as are a symbol's own atom when the compiler flagged it `#pragma force_active` (second `.comment` flag
+  byte `0x08`), the entry and the runtime's `__init_cpp_exceptions_reference` and `__fini_cpp_exceptions_reference`
+  (not `__destroy_global_chain_reference`: a link with only `global_destructor_chain.o` drops it); a weak
   definition another object overrides loses its atom. An `extabindex` entry lives when the function it describes does
   and keeps its `extab`.
 * **Layout.** `.text` starts at 0x10000; the output sections go in the order `.compress.init .init .compress.text
@@ -103,10 +106,16 @@ What the real linker does, as found by those links:
   is rounded up to 4), an empty one at the running address. An input section starts at its own `sh_addralign` (the map
   shows a `*fill*` row). The file offsets are the running position; a `PROGBITS` section after a `NOBITS` one does not
   keep the address-to-offset difference.
-* **Linker-made pieces.** `.ctors$00` (`_ctors`) and `.ctors$99` (`_ctors$99`, 4 zero bytes), likewise `.dtors`; the
-  suffixed input sections between them in name order, an unsuffixed `.ctors` after the suffixed. `extabindex` ends with
-  32 bytes, `_eti_init_info`: the table's start and end, the first function's address and the covered code's length,
-  then 16 zero bytes. `_SDA_BASE_` and `_SDA2_BASE_` are the start of `.sdata` and `.sdata2` plus 0x8000;
+* **Linker-made pieces.** `.ctors$00` (`_ctors`) and `.ctors$99` (`_ctors$99`, 4 zero bytes), likewise `.dtors`, exist
+  only when the section has live input other than the runtime's `$10` and `$15` hooks, or when an exception table is
+  live (`extabindex` kept; with none the sections are just the hooks). The suffixed input sections go between them in
+  name order, an unsuffixed `.ctors` after the suffixed. A live `extabindex` ends with 32 bytes, `_eti_init_info`; with
+  no exception table live but code that refers to `_eti_init_info` (the runtime's `__init_cpp_exceptions`) there is an
+  empty `extabindex` section and `_eti_init_info` has size 0 and value 0. A live `extab` needs
+  `__init_cpp_exceptions` (the real linker fails without it). `.mwcats.text` exists only when a kept object has one.
+  The 32 bytes of `_eti_init_info` are: the table's start and end, the first function's address and the covered code's length,
+  then 16 zero bytes. A global without a size (the `_savegpr_N` entry points inside `__save_gpr`) is kept in the symbol
+  table and the map only if code refers to it or it is the entry. `_SDA_BASE_` and `_SDA2_BASE_` are the start of `.sdata` and `.sdata2` plus 0x8000;
   `_stack_addr` is 0x3dfff0 and the heap is below the stack, both fixed; `_nbfunctions` counts the kept functions.
 * **The ELF.** One `PT_LOAD` per non-empty section, `e_flags` 0x80000000, entry at the symbol. The symbol table is, for
   each object that has a kept section: its `FILE` symbol, the section symbols of what was kept (the `extabindex` one
@@ -124,16 +133,32 @@ What the real linker does, as found by those links:
   listing is empty and the second has only symbol rows with the file offset of the end of the section, and that the
   `_f_X_rom` address is aligned for the input sections there were even if all were stripped.
 
+Real objects. `tools/linker_oracle.py` only builds small programs; the Echoes objects (1062 of them, the MSL, math and
+engine code the game was split into) were also linked: from a random function, the objects its undefined symbols need
+(the two runtime objects and a stub for `__register_fragment` and `__unregister_fragment` added, `-nostdlib`), by both
+linkers. Of 262 such links, 246 are identical, ELF and map. Four differ because the entry is a data symbol (an
+unrealistic case, laid out differently by the real linker). Nine differ only in the map: an unsized global such as
+`_savegpr_N` is listed, and its file offset in the map is the real linker's header size computed with one or two more
+sections than are kept, which has not been derived. Three differ in the ELF and were not looked into: a section symbol
+the real linker leaves out (`salCalcVolume`), and the code bytes of `PSMTXIdentity` and `g72x_init_state`, probably a
+relocation to a symbol inside an atom. Entry names longer than 63 characters are an
+error in the real linker. The generating code is in the linker: `FUN_00436b90` in the Ghidra program `mwld-gc-2-7` (the
+PPC EABI symbol and hook generator; the strings `_ctors`, `_dtors`, `_eti_init_info` and the three `*_reference` hooks
+are used only there). It decides which of the linker's own `.ctors$10`, `.dtors$10` and `.dtors$15` hook pieces to
+add when the runtime's functions are not defined by an object; the replica does not port it and so does not make
+those pieces (a link with a constructor but no `__init_cpp_exceptions.o` is not reproduced).
+
 What it does not know (the replica stops, or is untested): a linker command file, `-opt_partial` and the other partial
 links, `-sym` and DWARF merging, `-romaddr`, overlays, `-mapunused`/`-listclosure`, multiply-defined and other error
 messages (it prints only the first undefined symbol), and a library search (`-l`, `MWLibraries`). Objects with no
 `.comment` section, such as `mwasmeppc.exe`'s, are refused: one linked differently (the real linker kept less of the
 runtime, and ordered the symbols by another rule) and its alignments and flags are unknown. The tests use the 2.7
-linker, the 2.7 and 1.3.2 compilers, and the same two runtime objects, so that is the scope of "byte-identical".
+linker, the 2.7 and 1.3.2 compilers, and the Echoes runtime objects, so that is the scope of "byte-identical".
 
 ## Next
 
-1. Run it on a project: the split objects of an actual game, checked against the real link.
-2. The linker command file, which every project uses, and `-opt_partial`.
+1. The linker command file, which every project uses, and `-opt_partial`: `FUN_00436b90` and its callers in Ghidra
+   are the place to read what the real linker does with the sections of a link.
+2. Port the hook generator, and find where the unsized-global file offset comes from.
 3. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
    string table gives the file names and function boundaries for the former.

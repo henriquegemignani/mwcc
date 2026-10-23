@@ -97,6 +97,7 @@ pub struct Link {
     pub defs: HashMap<String, (usize, usize)>,
     pub eh: bool,           // some exception table (extabindex) is live
     pub eti_ref: bool,      // some live code refers to `_eti_init_info`
+    pub referenced: HashSet<(usize, usize)>,    // the (object, symbol) pairs live code refers to
 }
 
 fn defined(s: &Symbol) -> bool {
@@ -120,7 +121,7 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String]) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false };
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, referenced: HashSet::new() };
         let mut archives: Vec<Vec<Member>> = vec![];
         for path in inputs {
             let data = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
@@ -268,14 +269,9 @@ impl Link {
                                       "#   Referenced from <entry point>".into()]));
         }
         let mut work: Vec<usize> = vec![];
-        for obj in &self.objs {
-            for ids in obj.atoms.values() {
-                for &a in ids {
-                    let atom = &self.atoms[a];
-                    if atom.forced || atom.root {
-                        mark(&mut self.atoms, &mut work, a);
-                    }
-                }
+        for a in 0..self.atoms.len() {
+            if self.atoms[a].root {
+                mark(&mut self.atoms, &mut work, a);
             }
         }
         for name in std::iter::once(self.entry.as_str()).chain(RUNTIME_ROOTS.into_iter().filter(|n| *n != RUNTIME_ROOTS[2])) {
@@ -302,7 +298,7 @@ impl Link {
                     }
                 }
             }
-            // constructors and destructors a live object registers run (an object nothing needs is dropped whole)
+            // constructors, destructors and active data of a live object stay (an object nothing needs is dropped whole)
             for o in 0..self.objs.len() {
                 let ids: Vec<usize> = self.objs[o].atoms.values().flatten().copied().collect();
                 if !ids.iter().any(|&a| self.atoms[a].live) {
@@ -311,7 +307,7 @@ impl Link {
                 for a in ids {
                     let atom = &self.atoms[a];
                     let section = &self.objs[o].elf.sections[atom.sec].name;
-                    if matches!(output_name(section), Some(".ctors") | Some(".dtors"))
+                    if (atom.forced || matches!(output_name(section), Some(".ctors") | Some(".dtors")))
                         && !atom.symbols.iter().any(|s| self.objs[o].lost.contains(s)) {
                         mark(&mut self.atoms, &mut work, a);
                     }
@@ -340,6 +336,13 @@ impl Link {
                 s.shndx == 0 && s.name == "_eti_init_info"
             })
         });
+        for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
+            for r in self.relocs(a) {
+                let found = self.lookup(self.atoms[a].obj, r.sym);
+                self.referenced.extend(found);
+            }
+        }
+        self.referenced.extend(self.defs.get(&self.entry).copied());
         if self.eh && !self.defs.contains_key("__init_cpp_exceptions") {
             return Err(linker_error(&["#   undefined: '__init_cpp_exceptions'".into(),
                 "#   Referenced from '__init_cpp_exceptions_reference' in Linker Generated".into(),

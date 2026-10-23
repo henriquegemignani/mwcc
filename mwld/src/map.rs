@@ -23,17 +23,23 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
     let mut items = vec![];
     for &a in &piece.atoms {
         let atom = &link.atoms[a];
-        for &s in &atom.symbols {
-            items.push((atom.out_offset + obj.sym(s).value - atom.start, s));
+        for &s in atom.symbols.iter().filter(|&&s| {
+            let sym = obj.sym(s);
+            sym.size > 0 || sym.bind == 0 || link.referenced.contains(&(o, s))
+        }) {
+            let sym = obj.sym(s);
+            let owner = if atom.forced { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
+            items.push((atom.out_offset + sym.value - atom.start, sym.size > 0, s, owner));
         }
     }
-    items.sort();
-    items.iter().map(|&(off, s)| {
+    items.sort_by_key(|i| (i.0, i.1, i.2));
+    items.iter().map(|(off, _, s, owner)| {
+        let (off, s) = (*off, *s);
         let sym = obj.sym(s);
         let fo = file_off.unwrap_or(lay.map_off[i] + off);
         if sym.size == 0 {
             format!("  {off:08x} {:06x} {:08x} {fo:08x}    {} (entry of {}) \t{}\n", 0, lay.addr[i] + off, sym.name,
-                    piece.name, obj.label())
+                    owner, obj.label())
         } else {
             row(off, sym.size, lay.addr[i] + off, fo, obj.aligns[s].max(1), &sym.name, &obj.label())
         }
