@@ -357,6 +357,13 @@ impl Link {
         let mut names: HashSet<String> = HashSet::new();
         let roots: Vec<String> = std::iter::once(self.entry.clone()).chain(self.force_active.iter().cloned()).collect();
         let mut stack: Vec<(usize, Vec<Rela>, usize)> = vec![];
+        // (a forced name no object has comes first of all)
+        for name in &roots {
+            let defined = self.defs.contains_key(name) || self.objs.iter().any(|obj| obj.locals.contains_key(name));
+            if !defined && names.insert(name.clone()) {
+                self.not_found.push((name.clone(), None));
+            }
+        }
         let starts = roots.iter().map(|n| Some(n.clone())).chain(std::iter::once(None)).collect::<Vec<_>>();
         for start in starts {
             let mut first: Vec<usize> = vec![];
@@ -364,13 +371,8 @@ impl Link {
                 Some(name) => {
                     let found = self.defs.get(&name).copied()
                         .or_else(|| self.objs.iter().enumerate().find_map(|(o, obj)| obj.locals.get(&name).map(|&s| (o, s))));
-                    match found.and_then(|(o, s)| self.target(o, s, 0)) {
-                        Some((a, _)) => first.push(a),
-                        None => {
-                            if found.is_none() && names.insert(name.clone()) {
-                                self.not_found.push((name, None));
-                            }
-                        }
+                    if let Some((a, _)) = found.and_then(|(o, s)| self.target(o, s, 0)) {
+                        first.push(a);
                     }
                 }
                 None => first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live)),    // (the last ones marked come first)
