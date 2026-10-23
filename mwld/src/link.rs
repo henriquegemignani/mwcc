@@ -139,6 +139,7 @@ pub struct Link {
     pub linker_refs: HashSet<String>,   // the symbols live code takes from the linker
     pub force_active: Vec<String>,  // symbols a linker command file keeps (FORCEACTIVE)
     pub assigned: HashSet<String>,  // symbols a linker command file defines
+    pub section_symbols: HashSet<String>,  // the `_f_X`, `_f_X_rom` and `_e_X` of the sections the plan places
     pub referenced: HashSet<(usize, usize)>,    // the (object, symbol) pairs live code refers to
 }
 
@@ -163,10 +164,13 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
-        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false, eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial, unplaced: plan.unplaced(), not_found: vec![], linker_refs: HashSet::new(),
+        let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false,
+                                eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial,
+                                unplaced: plan.unplaced(), not_found: vec![], linker_refs: HashSet::new(),
                                 referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
-                                assigned: plan.assigns.iter().map(|a| a.0.clone()).collect() };
+                                assigned: plan.assigns.iter().map(|a| a.0.clone()).collect(),
+                                section_symbols: crate::layout::section_symbols(plan) };
         let mut archives: Vec<Vec<Member>> = vec![];
         for path in inputs {
             let data = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
@@ -216,8 +220,9 @@ impl Link {
                 (s.value, s.shndx) = (size, index as u16);
                 size += s.size;
             }
-            e.sections.push(Section { index, name: ".bss".into(), typ: SHT_NOBITS, flags: SHF_ALLOC | 1, size, info: 0,
-                                      align: widest, data: vec![], synthetic: true });
+            e.sections.push(Section { index, name: ".bss".into(), typ: SHT_NOBITS,
+                                      flags: SHF_ALLOC | SHF_WRITE, size, info: 0, align: widest, data: vec![],
+                                      synthetic: true });
         }
         let comment = e.section(".comment").ok_or(format!(
             "{name}: no .comment section (assembler output?); the symbols' alignments and flags are not known"))?;
@@ -244,10 +249,11 @@ impl Link {
             let mut sized: Vec<&Symbol> =
                 here.iter().copied().filter(|s| (s.typ == STT_OBJECT || s.typ == STT_FUNC) && s.size > 0).collect();
             let new = |start, size, align, symbols, whole_section| Atom {
-                obj: obj_index, sec: section.index, start, size, align, symbols, whole_section, root: false, live: false, out_offset: 0,
-                addr: 0 };
+                obj: obj_index, sec: section.index, start, size, align, symbols, whole_section, root: false, live: false,
+                out_offset: 0, addr: 0 };
             let mut list: Vec<Atom> = vec![];
-            // (a compiler mark such as `...data.0`, any symbol named `...`, makes the section one atom that lives or dies together)
+            // (a compiler mark such as `...data.0`, any symbol named `...`, makes the section one atom that lives or
+            // dies together)
             if sized.is_empty() || here.iter().any(|s| flags[s.index] & ACTIVE != 0 || s.name.starts_with("...")) {
                 list.push(new(0, section.size, section.align, here.iter().map(|s| s.index).collect(), true));
             } else {
@@ -273,8 +279,10 @@ impl Link {
         let locals = e.symbols.iter().filter(|s| s.bind == STB_LOCAL && s.shndx != 0 && s.shndx < SHN_LORESERVE
                                                    && s.typ != STT_SECTION && s.typ != STT_FILE)
             .map(|s| (s.name.clone(), s.index)).collect();
-        let relocs = e.sections.iter().filter(|s| s.flags & SHF_ALLOC != 0).map(|s| (s.index, e.relocs(s.index))).collect();
-        self.objs.push(Obj { name: name.into(), elf: e, aligns, cmt, archive: archive.into(), atoms, lost: HashSet::new(), relocs, locals });
+        let relocs = e.sections.iter().filter(|s| s.flags & SHF_ALLOC != 0)
+            .map(|s| (s.index, e.relocs(s.index))).collect();
+        self.objs.push(Obj { name: name.into(), elf: e, aligns, cmt, archive: archive.into(), atoms, lost: HashSet::new(),
+                             relocs, locals });
         Ok(())
     }
 
@@ -443,13 +451,15 @@ impl Link {
                 let obj = self.atoms[a].obj;
                 for r in self.relocs(a) {
                     if let Some((t, _)) = self.target(obj, r.sym, r.addend) {
-                                        mark(&mut self.atoms, &mut work, t);
+                        mark(&mut self.atoms, &mut work, t);
                         continue;
                     }
                     let s = self.objs[obj].sym(r.sym);
                     if !self.partial && s.shndx == 0 && !self.defs.contains_key(&s.name) && s.bind != STB_WEAK
-                        && !LINKER_SYMBOLS.contains(&s.name.as_str()) && !self.assigned.contains(&s.name) && !crate::layout::is_section_symbol(&s.name) {
-                        let from = self.atoms[a].symbols.first().map_or(self.section_name(a), |&s| &self.objs[obj].sym(s).name);
+                        && !LINKER_SYMBOLS.contains(&s.name.as_str()) && !self.assigned.contains(&s.name)
+                        && !self.section_symbols.contains(&s.name) {
+                        let from = self.atoms[a].symbols.first()
+                            .map_or(self.section_name(a), |&s| &self.objs[obj].sym(s).name);
                         return Err(linker_error(&[format!("#   undefined: '{}'", s.name),
                             format!("#   Referenced from '{}' in {}", from, self.objs[obj].name)]));
                     }

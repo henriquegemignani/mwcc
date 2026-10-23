@@ -3,7 +3,7 @@
 use crate::elf::{R, SHF_ALLOC, STT_FUNC};
 use crate::lcf::{Expr, Lcf};
 use crate::link::{align, is_nobits, output_name, Link, BASE, ORDER};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const SDA0: u32 = 0xFFFF8000;
 
@@ -111,7 +111,8 @@ fn has_contents(pieces: &[Vec<Piece>], i: usize) -> bool {
 /// The output sections `_rom_copy_info` has an entry for (those with contents, and `.init`), and those `_bss_init_info`
 /// clears (the bss ones with contents), in order.
 pub fn init_info_sections(seq: &[usize], has_contents: impl Fn(usize) -> bool) -> (Vec<usize>, Vec<usize>) {
-    let copied = seq.iter().copied().filter(|&i| !is_nobits(ORDER[i]) && (has_contents(i) || ORDER[i] == ".init")).collect();
+    let copied = seq.iter().copied()
+        .filter(|&i| !is_nobits(ORDER[i]) && (has_contents(i) || ORDER[i] == ".init")).collect();
     let cleared = seq.iter().copied().filter(|&i| is_nobits(ORDER[i]) && has_contents(i)).collect();
     (copied, cleared)
 }
@@ -124,9 +125,12 @@ pub fn section_symbol_names(name: &str) -> (String, String, String) {
     (format!("_f{sep}{tag}"), format!("_f{sep}{tag}_rom"), format!("_e{sep}{tag}"))
 }
 
-/// Whether `name` is one of the `_f_X`, `_f_X_rom` and `_e_X` symbols the linker defines for an output section.
-pub fn is_section_symbol(name: &str) -> bool {
-    ORDER.iter().any(|o| { let (f, r, e) = section_symbol_names(o); name == f || name == r || name == e })
+/// The `_f_X`, `_f_X_rom` and `_e_X` symbols the linker defines for the output sections of a plan.
+pub fn section_symbols(plan: &Plan) -> HashSet<String> {
+    plan.seq.iter().flat_map(|&(i, _)| {
+        let (f, r, e) = section_symbol_names(ORDER[i]);
+        [f, r, e]
+    }).collect()
 }
 
 /// The widest alignment among the input sections that go to an output section, even those stripped.
@@ -171,7 +175,9 @@ impl Layout {
             found.sort_by_key(|p| crate::link::body_rank(&p.name));    // (a section body lists its inputs in order)
             let hooks = |p: &Piece| p.name.ends_with("$10") || p.name.ends_with("$15");
             if name == ".bss" {
-                found.sort_by_key(|p| p.obj.zip(p.sec.as_ref()).map_or(false, |(o, s)| link.objs[o].elf.sections[s.index].synthetic));
+                found.sort_by_key(|p| {
+                    p.obj.zip(p.sec.as_ref()).map_or(false, |(o, s)| link.objs[o].elf.sections[s.index].synthetic)
+                });
             }
             if plan.partial && !plan.generate {
                 pieces.push(found);
@@ -197,8 +203,9 @@ impl Layout {
             }
             pieces.push(found);
         }
-        // `_rom_copy_info` and `_bss_init_info`, at the end of `.init` when code refers to them: a (ROM address, address, size)
-        // entry for each section with contents, then a (address, size) entry for each bss section, each list ended by zeros
+        // `_rom_copy_info` and `_bss_init_info`, at the end of `.init` when code refers to them: a (ROM address,
+        // address, size) entry for each section with contents, then a (address, size) entry for each bss section, each
+        // list ended by zeros
         if link.rom_ref {
             let seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
             let (copied, cleared) = init_info_sections(&seq, |i| has_contents(&pieces, i));
@@ -210,7 +217,8 @@ impl Layout {
         let seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
         let has_contents = |i: usize| has_contents(&pieces, i);
         if let Some(i) = (0..n).find(|&i| has_contents(i) && !seq.contains(&i)) {
-            return Err(format!("the linker command file does not place the section '{}'", ORDER[i]));
+            let place = if plan.lcf { "the linker command file does not place" } else { "the link has no place for" };
+            return Err(format!("{place} the section '{}'", ORDER[i]));
         }
         let nonempty: Vec<usize> = seq.iter().copied().filter(|&i| has_contents(i)).collect();
         let hdr = align(52 + if plan.partial { 0 } else { 32 * nonempty.len() as u32 }, 16);
@@ -218,8 +226,8 @@ impl Layout {
         for &(i, a) in &plan.seq {
             forced_align[i] = a.unwrap_or(1);
         }
-        let mut lay = Layout { lcf: plan.lcf, forced_align, seq, pieces, addr: vec![0; n], size: vec![0; n], align: vec![1; n], fills: vec![vec![]; n],
-                               nonempty, hdr, file_off: vec![0; n], sda: 0, sda2: 0, symbols: vec![],
+        let mut lay = Layout { lcf: plan.lcf, forced_align, seq, pieces, addr: vec![0; n], size: vec![0; n],
+                               align: vec![1; n], fills: vec![vec![]; n], nonempty, hdr, file_off: vec![0; n], sda: 0, sda2: 0, symbols: vec![],
                                sym_map: HashMap::new(), assign_deps: HashMap::new() };
         let mut cur = plan.origin;
         for &(i, forced_align) in &plan.seq {
@@ -326,10 +334,13 @@ impl Layout {
             syms.push((end, e));
         }
         let functions = link.objs.iter().flat_map(|o| o.atoms.values().flatten())
-            .filter(|&&a| link.atoms[a].live && link.atoms[a].symbols.iter().any(|&s| link.objs[link.atoms[a].obj].sym(s).typ == STT_FUNC))
+            .filter(|&&a| {
+                let atom = &link.atoms[a];
+                atom.live && atom.symbols.iter().any(|&s| link.objs[atom.obj].sym(s).typ == STT_FUNC)
+            })
             .count() as u32;
-        syms.extend([("_stack_addr", 0x3DFFF0), ("_stack_end", 0x3CFFF0), ("_heap_addr", 0x2CFFF0), ("_heap_end", 0x3CFFF0),
-                     ("_nbfunctions", functions), ("SIZEOF_HEADERS", self.hdr), ("_SDA_BASE_", self.sda),
+        syms.extend([("_stack_addr", 0x3DFFF0), ("_stack_end", 0x3CFFF0), ("_heap_addr", 0x2CFFF0),
+                     ("_heap_end", 0x3CFFF0), ("_nbfunctions", functions), ("SIZEOF_HEADERS", self.hdr), ("_SDA_BASE_", self.sda),
                      ("_SDA2_BASE_", self.sda2), ("_ABS_SDA_BASE_", self.sda), ("_ABS_SDA2_BASE_", self.sda2)]
             .map(|(n, v)| (n.to_string(), v)));
         self.sym_map = syms.iter().cloned().collect();
