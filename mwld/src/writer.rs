@@ -139,8 +139,9 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
         (0..link.objs.len()).filter(|&o| link.objs[o].has_cats() && !cats_entries(link, o).is_empty()).collect();
     let retained = retained_relocs(link, lay);
     let rela_sections: Vec<usize> = lay.nonempty.iter().copied().filter(|&i| !retained[i].is_empty()).collect();
+    let has_cats = !cats.is_empty();
     let cats_shndx = (total + rela_sections.len() + 1) as u16;
-    let symtab_shndx = cats_shndx + 1;
+    let symtab_shndx = cats_shndx + u16::from(has_cats);
 
     // -- symbols
     let mut entries = vec![Ent { name: String::new(), value: 0, size: 0, info: 0, shndx: 0 }];
@@ -216,8 +217,10 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
                                info: 0x10 | kind, shndx: sec_of(oi(name)) });
         }
     }
-    entries.push(Ent { name: "_eti_init_info".into(), value: lay.gen_addr("_eti_init_info").unwrap(), size: 32,
-                       info: 0x11, shndx: sec_of(oi("extabindex")) });
+    if let Some(value) = lay.gen_addr("_eti_init_info") {
+        let size = if link.eh { 32 } else { 0 };
+        entries.push(Ent { name: "_eti_init_info".into(), value, size, info: 0x11, shndx: sec_of(oi("extabindex")) });
+    }
     let (eo, es) = link.defs[&link.entry];
     let entry_atom = link.objs[eo].atoms[&(link.objs[eo].sym(es).shndx as usize)].iter().map(|&a| &link.atoms[a])
         .find(|a| a.contains(link.objs[eo].sym(es).value)).ok_or("the entry point has no code")?;
@@ -243,19 +246,21 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
 
     // -- the exception table index info: extabindex start/end, the code range it covers
     let ex = oi("extabindex");
-    let n_entries = lay.pieces[ex].iter().flat_map(|p| p.atoms.iter()).map(|&a| link.atoms[a].size).sum::<u32>() / 12;
-    let start = lay.addr[ex];
-    let (mut lo, mut hi) = (None::<u32>, 0u32);
-    for i in 0..n_entries as usize {
-        let (func, size) = (be32(&data[ex], 12 * i), be32(&data[ex], 12 * i + 4));
-        lo = Some(lo.map_or(func, |l| l.min(func)));
-        hi = hi.max(func.wrapping_add(size));
+    if link.eh {
+        let n_entries = lay.pieces[ex].iter().flat_map(|p| p.atoms.iter()).map(|&a| link.atoms[a].size).sum::<u32>() / 12;
+        let start = lay.addr[ex];
+        let (mut lo, mut hi) = (None::<u32>, 0u32);
+        for i in 0..n_entries as usize {
+            let (func, size) = (be32(&data[ex], 12 * i), be32(&data[ex], 12 * i + 4));
+            lo = Some(lo.map_or(func, |l| l.min(func)));
+            hi = hi.max(func.wrapping_add(size));
+        }
+        let mut info = vec![];
+        push32(&mut info, &[start, start + n_entries * 12, lo.unwrap_or(0), lo.map_or(0, |l| hi.wrapping_sub(l))]);
+        info.extend_from_slice(&[0; 16]);
+        let at = n_entries as usize * 12;
+        data[ex][at..at + 32].copy_from_slice(&info);
     }
-    let mut info = vec![];
-    push32(&mut info, &[start, start + n_entries * 12, lo.unwrap_or(0), lo.map_or(0, |l| hi.wrapping_sub(l))]);
-    info.extend_from_slice(&[0; 16]);
-    let at = n_entries as usize * 12;
-    data[ex][at..at + 32].copy_from_slice(&info);
     let mut cats_data = vec![];
     for &o in &cats {
         for (word, atom, offset) in cats_entries(link, o) {
@@ -288,7 +293,10 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
     let rela_names: Vec<String> = rela_sections.iter().map(|&i| format!(".rela{}", ORDER[i])).collect();
     let mut all_names: Vec<String> = out_secs.iter().map(|s| ORDER[s.0].to_string()).collect();
     all_names.extend(rela_names.iter().cloned());
-    all_names.extend([".mwcats.text", ".symtab", ".shstrtab", ".strtab"].map(String::from));
+    if has_cats {
+        all_names.push(".mwcats.text".into());
+    }
+    all_names.extend([".symtab", ".shstrtab", ".strtab"].map(String::from));
     let mut shstr = vec![0u8];
     let mut shoffs: HashMap<String, u32> = HashMap::new();
     for n in &all_names {
@@ -318,7 +326,7 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
     let cats_pos = pos;
     pos += cats_data.len() as u32;
     let shoff = align(pos, 16);
-    let n_sections = out_secs.len() + rela_names.len() + 4;
+    let n_sections = out_secs.len() + rela_names.len() + 3 + usize::from(has_cats);
     let mut image = vec![0u8; shoff as usize + 40 * (n_sections + 1)];
     let mut place = |at: u32, bytes: &[u8]| image[at as usize..at as usize + bytes.len()].copy_from_slice(bytes);
     for &(i, kind, ..) in &out_secs {
@@ -341,9 +349,11 @@ pub fn build(link: &Link, lay: &Layout) -> R<Output> {
         sh.push(header(shoffs[&rela_names[k]], 4, 0, 0, rela_pos[k], rela_data[k].len() as u32, symtab_shndx as u32,
                        sec_of(i) as u32, 4, 12));
     }
-    let cats_type = cats.first().map_or(0, |&o| link.objs[o].elf.section(".mwcats.text").unwrap().typ);
-    sh.push(header(shoffs[".mwcats.text"], cats_type, 0, 0, cats_pos, cats_data.len() as u32,
-                   sec_index(".text").unwrap_or(0) as u32, 0, 4, 1));
+    if has_cats {
+        let cats_type = link.objs[cats[0]].elf.section(".mwcats.text").unwrap().typ;
+        sh.push(header(shoffs[".mwcats.text"], cats_type, 0, 0, cats_pos, cats_data.len() as u32,
+                       sec_index(".text").unwrap_or(0) as u32, 0, 4, 1));
+    }
     sh.push(header(shoffs[".symtab"], 2, 0, 0, symtab_pos, symtab.len() as u32, symtab_shndx as u32 + 2,
                    first_global as u32, 4, 16));
     sh.push(header(shoffs[".shstrtab"], 3, 0, 0, shstr_pos, shstr.len() as u32, 0, 0, 1, 1));

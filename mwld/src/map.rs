@@ -68,15 +68,17 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
             out.extend(symbol_rows(link, lay, i, piece, None));
         }
     }
-    // the exception table index, after the others
-    section_head(&mut out, "extabindex");
-    let ex = oi("extabindex");
-    let end_off = lay.map_off[ex] + lay.size[ex];
-    for piece in &lay.pieces[ex] {
-        out.extend(symbol_rows(link, lay, ex, piece, Some(end_off)));
-        let who = owner(link, piece);
-        for (sym, off, size, _) in &piece.gen {
-            out.push_str(&row(piece.start + off, *size, piece.addr + off, end_off, 4, sym, &who));
+    // the exception table index, listed again after the others, when there is one
+    if link.eh {
+        section_head(&mut out, "extabindex");
+        let ex = oi("extabindex");
+        let end_off = lay.map_off[ex] + lay.size[ex];
+        for piece in &lay.pieces[ex] {
+            out.extend(symbol_rows(link, lay, ex, piece, Some(end_off)));
+            let who = owner(link, piece);
+            for (sym, off, size, _) in &piece.gen {
+                out.push_str(&row(piece.start + off, *size, piece.addr + off, end_off, 4, sym, &who));
+            }
         }
     }
     out.push_str("\n\nMemory map:\n                   Starting Size     File\n                   address           Offset\n");

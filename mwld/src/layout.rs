@@ -63,14 +63,23 @@ impl Layout {
                     }
                 }
             }
-            if name == ".ctors" || name == ".dtors" {
+            // The linker's own pieces: the `$00`/`$99` markers exist around constructors and destructors a program has
+            // (the runtime's own `$10` and `$15` hooks do not count), or whenever an exception table is live; the
+            // exception table index has its 32-byte info when one is live, and an empty `_eti_init_info` when only
+            // code refers to it.
+            let hooks = |p: &Piece| p.name.ends_with("$10") || p.name.ends_with("$15");
+            if (name == ".ctors" || name == ".dtors") && (link.eh || found.iter().any(|p| !hooks(p))) {
                 found.sort_by_key(|p| (p.name == name, p.name.clone()));    // (an unsuffixed one follows the suffixed)
                 let sym = format!("_{}", &name[1..]);
                 found.insert(0, gen_piece(&format!("{name}$00"), vec![(sym.clone(), 0, 0, 0)]));
                 found.push(gen_piece(&format!("{name}$99"), vec![(format!("{sym}$99"), 0, 4, 1)]));
+            } else if name == ".ctors" || name == ".dtors" {
+                found.sort_by_key(|p| (p.name == name, p.name.clone()));
             }
-            if name == "extabindex" {
+            if name == "extabindex" && link.eh {
                 found.push(gen_piece("extabindex", vec![("_eti_init_info".into(), 0, 32, 1)]));
+            } else if name == "extabindex" && link.eti_ref {
+                found.push(gen_piece("extabindex", vec![("_eti_init_info".into(), 0, 0, 1)]));
             }
             pieces.push(found);
         }
@@ -137,7 +146,9 @@ impl Layout {
     }
 
     pub fn gen_addr(&self, symbol: &str) -> Option<u32> {
-        self.pieces.iter().flatten().find_map(|p| p.gen.iter().find(|g| g.0 == symbol).map(|g| p.addr + g.1))
+        // (an empty `_eti_init_info`, there only because code refers to it, is at address 0)
+        self.pieces.iter().flatten().find_map(|p| p.gen.iter().find(|g| g.0 == symbol)
+            .map(|g| if g.2 == 0 && symbol == "_eti_init_info" { 0 } else { p.addr + g.1 }))
     }
 
     fn generated_symbols(&mut self, link: &Link) {
