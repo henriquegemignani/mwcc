@@ -7,6 +7,7 @@ pub const SHT_SYMTAB: u32 = 2;
 pub const SHT_RELA: u32 = 4;
 pub const SHT_NOBITS: u32 = 8;
 pub const SHT_STRTAB: u32 = 3;
+pub const SHF_WRITE: u32 = 1;
 pub const SHF_ALLOC: u32 = 2;
 pub const STB_LOCAL: u8 = 0;
 pub const STB_GLOBAL: u8 = 1;

@@ -3,12 +3,23 @@
 use crate::elf::R;
 use std::collections::HashMap;
 
+#[derive(Clone, Copy)]
+pub enum Op {
+    Or,
+    And,
+    Shl,
+    Shr,
+    Add,
+    Sub,
+    Mul,
+}
+
 pub enum Expr {
     Num(u32),
     Sym(String),
     SizeOf(String),
     Not(Box<Expr>),
-    Bin(char, Box<Expr>, Box<Expr>),
+    Bin(Op, Box<Expr>, Box<Expr>),
 }
 
 pub struct Lcf {
@@ -111,16 +122,20 @@ impl Parser {
     }
 
     fn binary(&mut self, level: usize) -> R<Expr> {
-        const LEVELS: [&[&str]; 4] = [&["|"], &["&"], &["<<", ">>", "+", "-"], &["*"]];
+        const LEVELS: [&[(&str, Op)]; 4] = [
+            &[("|", Op::Or)],
+            &[("&", Op::And)],
+            &[("<<", Op::Shl), (">>", Op::Shr), ("+", Op::Add), ("-", Op::Sub)],
+            &[("*", Op::Mul)],
+        ];
         if level == LEVELS.len() {
             return self.unary();
         }
         let mut left = self.binary(level + 1)?;
-        while let Some(op) = self.peek().filter(|t| LEVELS[level].contains(t)).map(String::from) {
+        while let Some(op) = self.peek().and_then(|t| LEVELS[level].iter().find(|l| l.0 == t)).map(|l| l.1) {
             self.at += 1;
             let right = self.binary(level + 1)?;
-            let c = match op.as_str() { "<<" => 'l', ">>" => 'r', o => o.chars().next().unwrap() };
-            left = Expr::Bin(c, Box::new(left), Box::new(right));
+            left = Expr::Bin(op, Box::new(left), Box::new(right));
         }
         Ok(left)
     }
@@ -151,17 +166,54 @@ impl Parser {
     }
 }
 
-/// Cuts the `FORCEACTIVE { ... }` block out of the text: its entries are mangled names, words of any characters.
+/// The text with its comments replaced by spaces.
+fn strip_comments(text: &str) -> R<String> {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('/') {
+        let (kept, tail) = rest.split_at(at);
+        out.push_str(kept);
+        if let Some(body) = tail.strip_prefix("/*") {
+            let end = body.find("*/").ok_or("linker command file: unterminated comment")?;
+            out.push(' ');
+            rest = &body[end + 2..];
+        } else if tail.starts_with("//") {
+            out.push(' ');
+            rest = tail.find('\n').map_or("", |n| &tail[n..]);
+        } else {
+            out.push('/');
+            rest = &tail[1..];
+        }
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// Cuts the `FORCEACTIVE { ... }` blocks out of the text (already without comments): their entries are mangled names,
+/// words of any characters.
 fn split_force_active(text: &str) -> R<(String, Vec<String>)> {
-    let Some(at) = text.find("FORCEACTIVE") else { return Ok((text.to_string(), vec![])) };
-    let open = text[at..].find('{').ok_or("linker command file: FORCEACTIVE without a block")? + at;
-    let close = text[open..].find('}').ok_or("linker command file: unterminated FORCEACTIVE")? + open;
-    let names = text[open + 1..close].split_whitespace().map(String::from).collect();
-    Ok((format!("{}{}", &text[..at], &text[close + 1..]), names))
+    const WORD: &str = "FORCEACTIVE";
+    let is_word = |c: char| c.is_alphanumeric() || "_.$?@".contains(c);
+    let (mut rest, mut kept, mut names) = (text, String::new(), vec![]);
+    while let Some(at) = rest.find(WORD) {
+        let (before, after) = (&rest[..at], &rest[at + WORD.len()..]);
+        if before.chars().next_back().map_or(false, is_word) || after.chars().next().map_or(false, is_word) {
+            kept.push_str(&rest[..at + WORD.len()]);
+            rest = after;
+            continue;
+        }
+        kept.push_str(before);
+        let open = after.find('{').ok_or("linker command file: FORCEACTIVE without a block")?;
+        let close = after[open..].find('}').ok_or("linker command file: unterminated FORCEACTIVE")? + open;
+        names.extend(after[open + 1..close].split_whitespace().map(String::from));
+        rest = &after[close + 1..];
+    }
+    kept.push_str(rest);
+    Ok((kept, names))
 }
 
 pub fn parse(text: &str) -> R<Lcf> {
-    let (text, force_active) = split_force_active(text)?;
+    let (text, force_active) = split_force_active(&strip_comments(text)?)?;
     let mut p = Parser { toks: tokens(&text)?, at: 0 };
     let mut lcf = Lcf { origin: None, sections: vec![], assigns: vec![], force_active };
     while let Some(head) = p.peek().map(String::from) {
@@ -252,13 +304,13 @@ impl Expr {
             Expr::Bin(op, a, b) => {
                 let (a, b) = (a.eval(symbols, sizes)?, b.eval(symbols, sizes)?);
                 match op {
-                    '+' => a.wrapping_add(b),
-                    '-' => a.wrapping_sub(b),
-                    '*' => a.wrapping_mul(b),
-                    '&' => a & b,
-                    '|' => a | b,
-                    'l' => a.wrapping_shl(b),
-                    _ => a.wrapping_shr(b),
+                    Op::Add => a.wrapping_add(b),
+                    Op::Sub => a.wrapping_sub(b),
+                    Op::Mul => a.wrapping_mul(b),
+                    Op::And => a & b,
+                    Op::Or => a | b,
+                    Op::Shl => a.wrapping_shl(b),
+                    Op::Shr => a.wrapping_shr(b),
                 }
             }
         })

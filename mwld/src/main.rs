@@ -9,8 +9,8 @@
 //! * Atoms nothing refers to are dropped. The roots are the entry point, the atoms of symbols marked `force_active`
 //!   and the C++ runtime's init and fini `*_reference` symbols; constructors, destructors and hook sections stay
 //!   only in objects that are otherwise live.
-//! * The output sections go from 0x10000 in the default order (or where the command file says), relocations are applied, and the ELF and the link map
-//!   are written.
+//! * The output sections go from 0x10000 in the default order (or where the command file says), relocations are
+//!   applied, and the ELF and the link map are written.
 mod elf;
 mod layout;
 mod lcf;
