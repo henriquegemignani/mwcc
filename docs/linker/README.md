@@ -93,7 +93,8 @@ What the real linker does, as found by those links:
 * **Dead stripping is by symbol.** An input section is cut into one atom per sized symbol; atoms nothing refers to are
   dropped and the rest are packed, each at its own alignment. That alignment is in the object's `.comment` section
   (a 44-byte header, then 8 bytes per symbol: alignment, two flag bytes, padding), not in the ELF. A section with a
-  symbol whose second flag byte is `0x10` (the compiler's `...data.0`) is kept whole. `.ctors` and `.dtors` atoms
+  symbol whose second flag byte is `0x10`, or with a symbol named `...data.0` (the compiler's mark of a section start),
+  is kept whole. `.ctors` and `.dtors` atoms
   of an object with anything else live are roots (an object nothing needs is dropped whole, `.ctors$10` hooks
   included), as are a symbol's own atom when the compiler flagged it `#pragma force_active` (second `.comment` flag
   byte `0x08`), the entry and the runtime's `__init_cpp_exceptions_reference` and `__fini_cpp_exceptions_reference`
@@ -121,10 +122,10 @@ What the real linker does, as found by those links:
   each object that has a kept section: its `FILE` symbol, the section symbols of what was kept (the `extabindex` one
   has value 0), the kept locals; then the four section symbols of the linker's own pieces, all the globals in object
   order, and `_ctors`, `_ctors$99`, `_dtors`, `_dtors$99`, `_eti_init_info`. `st_other` is cleared. The relocations of
-  the objects that have a `.mwcats.text` are kept, sorted by address, with the address and symbol index of the output
-  (`.rela.text`, `.relaextabindex`, `.rela.data`...); `.mwcats.text` itself is rebuilt for the kept functions. The
-  rule is the section: an object compiled with `-pragma "cats off"` (as Echoes' runtime is) has no `.mwcats.text`
-  and none of its relocations are kept, though the compiler and linker are the same.
+  the objects that have a `.mwcats.text` or a `.note.split` (a section the dtk splitter writes) are kept, sorted by
+  address, with the address and symbol index of the output (`.rela.text`, `.relaextabindex`, `.rela.data`...);
+  `.mwcats.text` itself is rebuilt for the kept functions. The rule is the section: an object compiled with `-pragma
+  "cats off"` (as Echoes' runtime is) has neither and none of its relocations are kept, though the compiler and linker are the same.
   Sections: the loadable ones, `.rela*`, `.mwcats.text`, `.symtab`, `.shstrtab`, `.strtab` in the file in the order
   `.shstrtab`, `.strtab`, `.symtab`, relocations, `.mwcats.text`, with the section header table at the next multiple
   of 16.
@@ -140,24 +141,59 @@ linkers. Of 360 random links that the real linker accepts, all are identical, EL
 were three rules found since: an `R_PPC_EMB_SDA21` relocation may point 2 bytes into its instruction; active data
 with sized symbols is dropped like any other, while a section with no sized symbol, or a `.ctors`/`.dtors` hook, is kept
 whole; and the map's file offset of a symbol without size inside an atom is the atom's end, as the real linker prints
-it). One link of the sweep needs a common symbol (`SHN_COMMON`), which the replica refuses with an error. Entry names
+it). Entry names
 longer than 63 characters are an error in the real linker. The generating code is in the linker: `FUN_00436b90` in the Ghidra program `mwld-gc-2-7` (the
 PPC EABI symbol and hook generator; the strings `_ctors`, `_dtors`, `_eti_init_info` and the three `*_reference` hooks
 are used only there). It decides which of the linker's own `.ctors$10`, `.dtors$10` and `.dtors$15` hook pieces to
 add when the runtime's functions are not defined by an object; the replica does not port it and so does not make
 those pieces (a link with a constructor but no `__init_cpp_exceptions.o` is not reproduced).
 
-What it does not know (the replica stops, or is untested): a linker command file, `-opt_partial` and the other partial
+What it does not know (the replica stops, or is untested): `-opt_partial` and the other partial
 links, `-sym` and DWARF merging, `-romaddr`, overlays, `-mapunused`/`-listclosure`, multiply-defined and other error
 messages (it prints only the first undefined symbol), and a library search (`-l`, `MWLibraries`). Objects with no
 `.comment` section, such as `mwasmeppc.exe`'s, are refused: one linked differently (the real linker kept less of the
 runtime, and ordered the symbols by another rule) and its alignments and flags are unknown. The tests use the 2.7
 linker, the 2.7 and 1.3.2 compilers, and the Echoes runtime objects, so that is the scope of "byte-identical".
 
+## Linker command files and the whole game
+
+`-lcf FILE` (`mwld/src/lcf.rs`, `layout.rs`) supports `MEMORY { name : origin = N, length = N }`, one `GROUP` of
+output sections with empty bodies (`.text ALIGN(0x20):{}`), symbol assignments after it (`+ - * & | ~ << >>`,
+`SIZEOF(.section)`, other symbols), and `FORCEACTIVE { names }` (the names contain `<>,`, so the block is cut out
+before tokenizing). `-fp`, `-nodefaults`, `-sdata`, `-sdata2`, `-g`, `-mapunused` and `@rspfile` are accepted.
+`tools/lcf_oracle.py` runs one link with both linkers and compares. Metroid Prime 2's whole DOL (970 objects,
+`-fp hardware -nodefaults -lcf build/G2ME01/ldscript.lcf`, 6.6 MB) is byte-identical, ELF and map; the replica takes 0.4 s.
+(The repository's own `main.elf` is from older objects and differs, so the real linker has to be run again.) What it needed:
+
+* **Layout.** The output sections are in the order of the command file, starting at the `origin`; each starts at
+  max(its `ALIGN`, its inputs' alignment); an empty one does not advance the address. `_f_X_rom` is
+  align(`_f_X`, max(widest input alignment, the file's `ALIGN`)). With a command file the symbol list (map, symbol
+  table) follows only the file's sections; assigned symbols that are new come first in "Linker generated symbols", and
+  those the linker has (`_stack_addr`, `_stack_end`) take the new value in place. An empty `.bss` and `.stack` are
+  left out of the memory map; an empty `.bss` (and `.stack`) has a `_rom` symbol, a non-empty `.bss` does not.
+* **Common symbols.** Each object's commons make a `.bss` piece of their own, owned by the object, placed after
+  every object's ordinary `.bss` in object order; their offsets follow the symbol order, each at its alignment (the
+  symbol's value), with no padding. The piece's section symbol comes after the object's locals, and an object that is
+  only commons has no `FILE` symbol.
+* **`_rom_copy_info` and `_bss_init_info`** are generated at the end of `.init` ("Linker Generated Symbol File") when
+  code refers to them: 12-byte entries (ROM address, address, size) for each section that has contents (`.init` too),
+  then 12 zero bytes; 8-byte entries (address, size) for each non-empty bss section, then 8 zero bytes. That piece
+  has a section symbol before `.ctors$00`'s.
+* **`ABS` symbols.** Undefined symbols the linker defines (`_SDA_BASE_`, `_stack_addr`, those the file assigns) are
+  global `NOTYPE`/`SHN_ABS` symbols after the object globals, in the order of the "Linker generated symbols" list,
+  plus the symbols an emitted assignment uses (`_db_stack_addr` for `__ArenaLo`), before `_rom_copy_info`.
+* **Weak duplicates.** A definition another object overrides is dropped even when it is flagged force-active (the
+  duplicate inline functions of a catch-all object stay out of the output and out of the map's symbol rows, though
+  the piece's size in the map still counts them).
+* **Names.** A symbol may be defined local in an object and listed there as undefined global; the reference binds to the
+  local. An unsized symbol inside an atom that has a sized symbol gets the atom's end as its file offset, and its
+  row goes after the sized symbol's, even when it is at the atom's start.
+
 ## Next
 
-1. The linker command file, which every project uses, and `-opt_partial`: `FUN_00436b90` and its callers in Ghidra
-   are the place to read what the real linker does with the sections of a link.
-2. Port the hook generator; support common symbols (find where the real linker puts them).
+1. `-opt_partial`, `-r`, `-strip_partial` and section bodies in the linker command file (`*(.data)`), which the
+   REL modules need: `FUN_00436b90` and its callers in Ghidra are the place to read what the real linker does with
+   the sections of a link.
+2. Port the hook generator.
 3. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
    string table gives the file names and function boundaries for the former.

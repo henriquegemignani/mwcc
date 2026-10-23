@@ -40,6 +40,7 @@ pub struct Section {
     pub info: u32,
     pub align: u32,
     pub data: Vec<u8>,
+    pub synthetic: bool,        // made by the linker, not in the file (the home of common symbols)
 }
 
 pub struct Symbol {
@@ -126,7 +127,7 @@ pub fn parse(raw: &[u8], path: &str) -> R<ElfFile> {
         };
         names.push(name);
         sections.push(Section { index: i, name: String::new(), typ, flags, size, info: be32(raw, at + 28),
-                                align: be32(raw, at + 32), data });
+                                align: be32(raw, at + 32), data, synthetic: false });
     }
     if shnum > 0 {
         let table = sections[shstrndx].data.clone();

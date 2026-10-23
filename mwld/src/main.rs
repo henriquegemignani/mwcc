@@ -12,12 +12,21 @@
 //!   are written.
 mod elf;
 mod layout;
+mod lcf;
 mod link;
 mod map;
 mod writer;
 
 fn run(args: &[String]) -> elf::R<()> {
     let (mut entry, mut map_file, mut output, mut inputs) = ("__start".to_string(), None, "a.out".to_string(), vec![]);
+    let mut lcf: Option<String> = None;
+    let mut args: Vec<String> = args.to_vec();
+    // `@file` holds more arguments, one per line (or space separated)
+    while let Some(at) = args.iter().position(|a| a.starts_with('@')) {
+        let path = args[at][1..].to_string();
+        let text = elf::latin1(&std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?);
+        args.splice(at..=at, text.split_whitespace().map(String::from));
+    }
     let mut i = 0;
     while i < args.len() {
         let a = args[i].as_str();
@@ -29,14 +38,22 @@ fn run(args: &[String]) -> elf::R<()> {
             "-m" | "-main" => entry = value()?,
             "-map" => map_file = Some(value()?),
             "-o" => output = value()?,
-            "-nostdlib" => {}
+            "-lcf" => lcf = Some(value()?),
+            "-fp" | "-sdata" | "-sdata2" => {
+                value()?;
+            }
+            "-nostdlib" | "-nodefaults" | "-g" | "-mapunused" => {}
             _ if a.starts_with('-') => return Err(format!("unsupported option '{a}'")),
             _ => inputs.push(a.to_string()),
         }
         i += 1;
     }
-    let mut linked = link::Link::new(&entry, &inputs)?;
-    let lay = layout::Layout::new(&mut linked);
+    let plan = match lcf {
+        Some(path) => layout::Plan::from_lcf(lcf::parse(&elf::latin1(&std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?))?)?,
+        None => layout::Plan::default_plan(),
+    };
+    let mut linked = link::Link::new(&entry, &inputs, &plan)?;
+    let lay = layout::Layout::new(&mut linked, &plan)?;
     let image = writer::build(&linked, &lay)?;
     std::fs::write(&output, image).map_err(|e| format!("{output}: {e}"))?;
     if let Some(path) = map_file {

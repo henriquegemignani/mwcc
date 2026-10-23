@@ -1,8 +1,8 @@
 //! Section contents, relocations, the symbol table and the output ELF file.
 use crate::elf::*;
-use crate::layout::{oi, Layout};
+use crate::layout::{oi, section_symbol_names, Layout};
 use crate::link::{align, is_nobits, output_name, Link, ORDER};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 struct Ent {
     name: String,
@@ -74,12 +74,12 @@ fn cats_entries(link: &Link, o: usize) -> Vec<([u8; 4], usize, u32)> {
     out
 }
 
-/// The relocations kept in the output, by output section: those of the objects with a `.mwcats.text`.
+/// The relocations kept in the output, by output section: those of the objects with a `.mwcats.text` or `.note.split`.
 fn retained_relocs(link: &Link, lay: &Layout) -> Vec<Vec<Retained>> {
     let mut out: Vec<Vec<Retained>> = vec![vec![]; ORDER.len()];
     for &i in &lay.nonempty {
         for piece in &lay.pieces[i] {
-            if piece.obj.map_or(false, |o| link.objs[o].has_cats()) {
+            if piece.obj.map_or(false, |o| link.objs[o].keeps_relocs()) {
                 for &a in &piece.atoms {
                     for r in link.relocs(a) {
                         out[i].push((a, r.offset, r.sym, r.kind, r.addend));
@@ -163,6 +163,15 @@ fn shndx_of(lay: &Layout, i: usize) -> u16 {
     lay.nonempty.iter().position(|&x| x == i).unwrap() as u16 + 1
 }
 
+/// The output symbol standing for the section symbol of an object's input section.
+fn section_symbol(lay: &Layout, o: usize, section: &Section) -> Ent {
+    let out = output_name(&section.name).unwrap();
+    let piece = lay.pieces[oi(out)].iter()
+        .find(|p| p.obj == Some(o) && p.sec.as_ref().map(|s| s.index) == Some(section.index)).unwrap();
+    let value = if out == "extabindex" { 0 } else { piece.addr };
+    Ent { name: String::new(), value, size: 0, info: STT_SECTION, shndx: shndx_of(lay, oi(out)) }
+}
+
 fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> SymbolTable {
     let sec_of = |i: usize| shndx_of(lay, i);
     let mut entries = vec![Ent { name: String::new(), value: 0, size: 0, info: 0, shndx: 0 }];
@@ -174,21 +183,21 @@ fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> S
         if live_secs.is_empty() && !cats.contains(&o) {
             continue;
         }
-        if let Some(file) = e.symbols.iter().find(|s| s.typ == STT_FILE) {
+        // (an object that is only common symbols has no file symbol)
+        let real_sections = e.sections.iter().any(|s| !s.synthetic && live_secs.contains(&s.index));
+        if let Some(file) = e.symbols.iter().find(|s| s.typ == STT_FILE).filter(|_| real_sections || cats.contains(&o)) {
             new_index[o].insert(file.index, entries.len());
             entries.push(Ent { name: file.name.clone(), value: 0, size: 0, info: STT_FILE, shndx: SHN_ABS });
         }
         for section in &e.sections {
             let sym = e.symbols.iter().find(|s| s.typ == STT_SECTION && s.shndx as usize == section.index);
             if live_secs.contains(&section.index) {
-                let out = output_name(&section.name).unwrap();
-                let piece = lay.pieces[oi(out)].iter()
-                    .find(|p| p.obj == Some(o) && p.sec.as_ref().map(|s| s.index) == Some(section.index)).unwrap();
-                let value = if out == "extabindex" { 0 } else { piece.addr };
-                if let Some(sym) = sym {
-                    new_index[o].insert(sym.index, entries.len());
+                if !section.synthetic {
+                    if let Some(sym) = sym {
+                        new_index[o].insert(sym.index, entries.len());
+                    }
+                    entries.push(section_symbol(lay, o, section));
                 }
-                entries.push(Ent { name: String::new(), value, size: 0, info: STT_SECTION, shndx: sec_of(oi(out)) });
             } else if section.name == ".mwcats.text" && cats.contains(&o) {
                 if let Some(sym) = sym {
                     new_index[o].insert(sym.index, entries.len());
@@ -206,8 +215,15 @@ fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> S
                 }
             }
         }
+        // (the section of an object's common symbols gets its symbol after the object's locals)
+        for section in e.sections.iter().filter(|s| s.synthetic && live_secs.contains(&s.index)) {
+            entries.push(section_symbol(lay, o, section));
+        }
     }
     // section symbols of the linker's own pieces
+    for piece in lay.pieces[oi(".init")].iter().filter(|p| p.obj.is_none() && !p.gen.is_empty()) {
+        entries.push(Ent { name: String::new(), value: piece.addr, size: 0, info: STT_SECTION, shndx: sec_of(oi(".init")) });
+    }
     for name in [".ctors", ".dtors"] {
         for tag in ["$00", "$99"] {
             if let Some(piece) = lay.pieces[oi(name)].iter().find(|p| p.name == format!("{name}{tag}")) {
@@ -228,7 +244,21 @@ fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> S
             }
         }
     }
-    for name in [".ctors", ".dtors"] {
+    // the symbols code takes from the linker (`_SDA_BASE_`, those a linker command file defines), and the ones those
+    // definitions use, in the order of the linker's symbol list
+    let mut needed: HashSet<&String> = link.linker_refs.iter().collect();
+    let mut work: Vec<&String> = needed.iter().copied().collect();
+    while let Some(name) = work.pop() {
+        for dep in lay.assign_deps.get(name).into_iter().flatten() {
+            if needed.insert(dep) {
+                work.push(dep);
+            }
+        }
+    }
+    for (name, value) in lay.symbols.iter().filter(|(name, _)| needed.contains(name)) {
+        entries.push(Ent { name: name.clone(), value: *value, size: 0, info: STB_GLOBAL << 4, shndx: SHN_ABS });
+    }
+    for name in [".init", ".ctors", ".dtors"] {
         for g in lay.pieces[oi(name)].iter().flat_map(|p| p.gen.iter()) {
             entries.push(Ent { name: g.name.clone(), value: lay.gen_addr(&g.name).unwrap(), size: g.size,
                                info: (STB_GLOBAL << 4) | g.typ, shndx: sec_of(oi(name)) });
@@ -268,10 +298,32 @@ fn section_contents(link: &Link, lay: &Layout) -> R<Vec<Vec<u8>>> {
         data[i] = buf;
     }
     apply_relocs(link, lay, &mut data)?;
+    if link.rom_ref {
+        write_init_info(lay, &mut data);
+    }
     if link.eh {
         write_eti_info(lay, &mut data);
     }
     Ok(data)
+}
+
+/// `_rom_copy_info` and `_bss_init_info`: where each section with contents is copied from, and which sections to clear.
+fn write_init_info(lay: &Layout, data: &mut [Vec<u8>]) {
+    let init = oi(".init");
+    let at = (lay.gen_addr("_rom_copy_info").unwrap() - lay.addr[init]) as usize;
+    let (mut copy, mut clear) = (vec![], vec![]);
+    for &i in &lay.seq {
+        let used = lay.nonempty.contains(&i);
+        if !is_nobits(ORDER[i]) && (used || i == init) {
+            push32(&mut copy, &[lay.sym_map[&section_symbol_names(ORDER[i]).1], lay.addr[i], lay.size[i]]);
+        } else if is_nobits(ORDER[i]) && used {
+            push32(&mut clear, &[lay.addr[i], lay.size[i]]);
+        }
+    }
+    copy.extend_from_slice(&[0; 12]);
+    clear.extend_from_slice(&[0; 8]);
+    data[init][at..at + copy.len()].copy_from_slice(&copy);
+    data[init][at + copy.len()..at + copy.len() + clear.len()].copy_from_slice(&clear);
 }
 
 /// `_eti_init_info`: the extabindex start and end, then the code range its entries cover.

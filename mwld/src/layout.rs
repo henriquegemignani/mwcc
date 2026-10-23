@@ -1,5 +1,6 @@
 //! The default (no linker command file) layout: output sections from the base address in a fixed order.
-use crate::elf::{SHF_ALLOC, STT_FUNC};
+use crate::elf::{R, SHF_ALLOC, STT_FUNC};
+use crate::lcf::{Expr, Lcf};
 use crate::link::{align, is_nobits, output_name, Link, BASE, ORDER};
 use std::collections::HashMap;
 
@@ -36,7 +37,36 @@ pub struct Piece {
     pub gen: Vec<GenSymbol>,                    // the symbols of a linker-generated piece
 }
 
+/// Where the output sections go: the address of the first, and the sections in order with the alignments a linker
+/// command file gives them. Without a file, the default order from `BASE`.
+pub struct Plan {
+    pub origin: u32,
+    pub seq: Vec<(usize, Option<u32>)>,
+    pub assigns: Vec<(String, Expr)>,
+    pub lcf: bool,
+    pub force_active: Vec<String>,
+}
+
+impl Plan {
+    pub fn default_plan() -> Plan {
+        Plan { origin: BASE, seq: (0..ORDER.len()).filter(|&i| ORDER[i] != ".stack").map(|i| (i, None)).collect(),
+               assigns: vec![], lcf: false, force_active: vec![] }
+    }
+
+    pub fn from_lcf(lcf: Lcf) -> R<Plan> {
+        let mut seq = vec![];
+        for (name, align) in &lcf.sections {
+            let i = ORDER.iter().position(|o| o == name).ok_or(format!("linker command file: unknown section '{name}'"))?;
+            seq.push((i, *align));
+        }
+        Ok(Plan { origin: lcf.origin, seq, assigns: lcf.assigns, lcf: true, force_active: lcf.force_active })
+    }
+}
+
 pub struct Layout {
+    pub lcf: bool,                              // a linker command file placed the sections
+    pub forced_align: Vec<u32>,                 // the alignment the file gives each output section
+    pub seq: Vec<usize>,                        // the output sections in order, as indices into ORDER
     pub pieces: Vec<Vec<Piece>>,                // by index into ORDER
     pub addr: Vec<u32>,
     pub size: Vec<u32>,
@@ -49,10 +79,12 @@ pub struct Layout {
     pub sda2: u32,
     pub symbols: Vec<(String, u32)>,
     pub sym_map: HashMap<String, u32>,
+    /// The symbols each assignment of the linker command file uses.
+    pub assign_deps: HashMap<String, Vec<String>>,
 }
 
 /// The names of the linker's symbols for an output section: its start, the ROM address of its start, its end.
-fn section_symbol_names(name: &str) -> (String, String, String) {
+pub fn section_symbol_names(name: &str) -> (String, String, String) {
     let dotted = name.starts_with('.');
     let tag = if dotted { name.trim_matches('.').replace('.', "_") } else { name.to_string() };
     let sep = if dotted { "_" } else { "" };
@@ -79,7 +111,7 @@ fn gen_piece(name: &str, gen: Vec<GenSymbol>) -> Piece {
 }
 
 impl Layout {
-    pub fn new(link: &mut Link) -> Layout {
+    pub fn new(link: &mut Link, plan: &Plan) -> R<Layout> {
         let mut pieces: Vec<Vec<Piece>> = vec![];
         for name in ORDER {
             let mut found = vec![];
@@ -100,6 +132,9 @@ impl Layout {
             // exception table index has its 32-byte info when one is live, and an empty `_eti_init_info` when only
             // code refers to it.
             let hooks = |p: &Piece| p.name.ends_with("$10") || p.name.ends_with("$15");
+            if name == ".bss" {
+                found.sort_by_key(|p| p.obj.zip(p.sec.as_ref()).map_or(false, |(o, s)| link.objs[o].elf.sections[s.index].synthetic));
+            }
             if name == ".ctors" || name == ".dtors" {
                 found.sort_by_key(|p| (p.name == name, p.name.clone()));    // (an unsuffixed one follows the suffixed)
             }
@@ -115,22 +150,41 @@ impl Layout {
             }
             pieces.push(found);
         }
+        // `_rom_copy_info` and `_bss_init_info`, at the end of `.init` when code refers to them: a (ROM address, address, size)
+        // entry for each section with contents, then a (address, size) entry for each bss section, each list ended by zeros
+        if link.rom_ref {
+            let used = |i: usize| pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty());
+            let copied = plan.seq.iter().filter(|&&(i, _)| !is_nobits(ORDER[i]) && (used(i) || ORDER[i] == ".init")).count();
+            let cleared = plan.seq.iter().filter(|&&(i, _)| is_nobits(ORDER[i]) && used(i)).count();
+            let (copy_size, bss_size) = (12 * (copied as u32 + 1), 8 * (cleared as u32 + 1));
+            pieces[oi(".init")].push(gen_piece(".init", vec![gen_symbol("_rom_copy_info", 0, copy_size, 1),
+                                                             gen_symbol("_bss_init_info", copy_size, bss_size, 1)]));
+        }
         let n = ORDER.len();
-        let nonempty: Vec<usize> =
-            (0..n).filter(|&i| pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty())).collect();
+        let seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
+        let has_contents = |i: usize| pieces[i].iter().any(|p| !p.atoms.is_empty() || !p.gen.is_empty());
+        if let Some(i) = (0..n).find(|&i| has_contents(i) && !seq.contains(&i)) {
+            return Err(format!("the linker command file does not place the section '{}'", ORDER[i]));
+        }
+        let nonempty: Vec<usize> = seq.iter().copied().filter(|&i| has_contents(i)).collect();
         let hdr = align(52 + 32 * nonempty.len() as u32, 16);
-        let mut lay = Layout { pieces, addr: vec![0; n], size: vec![0; n], align: vec![1; n], fills: vec![vec![]; n],
+        let mut forced_align = vec![1; n];
+        for &(i, a) in &plan.seq {
+            forced_align[i] = a.unwrap_or(1);
+        }
+        let mut lay = Layout { lcf: plan.lcf, forced_align, seq, pieces, addr: vec![0; n], size: vec![0; n], align: vec![1; n], fills: vec![vec![]; n],
                                nonempty, hdr, file_off: vec![0; n], sda: 0, sda2: 0, symbols: vec![],
-                               sym_map: HashMap::new() };
-        let mut cur = BASE;
-        for i in 0..n {
+                               sym_map: HashMap::new(), assign_deps: HashMap::new() };
+        let mut cur = plan.origin;
+        for &(i, forced_align) in &plan.seq {
             let name = ORDER[i];
             if !lay.nonempty.contains(&i) {
                 lay.addr[i] = if name.starts_with(".PPC.EMB") { SDA0 } else { cur };
                 continue;
             }
             let extra = if matches!(name, ".ctors" | ".dtors" | "extabindex") { 4 } else { 1 };
-            lay.align[i] = lay.pieces[i].iter().filter_map(|p| p.sec.as_ref().map(|s| s.align)).max().unwrap_or(0).max(extra);
+            lay.align[i] = lay.pieces[i].iter().filter_map(|p| p.sec.as_ref().map(|s| s.align)).max().unwrap_or(0)
+                .max(extra).max(forced_align.unwrap_or(1));
             cur = align(cur, lay.align[i]);
             lay.addr[i] = cur;
             let mut offset = 0;
@@ -161,7 +215,7 @@ impl Layout {
         }
         // file offsets as the map shows them: a section without contents (or in the bss) starts where the last ended
         let mut pos = hdr;
-        for i in 0..n {
+        for &i in &lay.seq.clone() {
             if !lay.nonempty.contains(&i) {
                 // (an empty section is aligned for the input sections there were, even when all of them were stripped)
                 lay.file_off[i] = align(pos, widest_input_align(link, ORDER[i]));
@@ -176,7 +230,27 @@ impl Layout {
         lay.sda = lay.addr[oi(".sdata")] + 0x8000;
         lay.sda2 = lay.addr[oi(".sdata2")] + 0x8000;
         lay.generated_symbols(link);
-        lay
+        lay.assign(plan)?;
+        Ok(lay)
+    }
+
+    /// The symbol assignments of a linker command file: a new symbol is listed before the linker's own, one the linker
+    /// defines (`_stack_addr`) takes the new value in its place.
+    fn assign(&mut self, plan: &Plan) -> R<()> {
+        let sizes: HashMap<String, u32> = self.seq.iter().map(|&i| (ORDER[i].to_string(), self.size[i])).collect();
+        let mut added = vec![];
+        for (name, expr) in &plan.assigns {
+            let value = expr.eval(&self.sym_map, &sizes)?;
+            expr.names(self.assign_deps.entry(name.clone()).or_default());
+            self.sym_map.insert(name.clone(), value);
+            match self.symbols.iter_mut().chain(added.iter_mut()).find(|s| s.0 == *name) {
+                Some(slot) => slot.1 = value,
+                None => added.push((name.clone(), value)),
+            }
+        }
+        added.append(&mut self.symbols);
+        self.symbols = added;
+        Ok(())
     }
 
     pub fn gen_addr(&self, symbol: &str) -> Option<u32> {
@@ -187,13 +261,15 @@ impl Layout {
 
     fn generated_symbols(&mut self, link: &Link) {
         let mut syms: Vec<(String, u32)> = vec![];
-        for (i, name) in ORDER.iter().enumerate() {
+        for &i in &self.seq {
+            let name = ORDER[i];
             let (first, rom, end) = section_symbol_names(name);
             let (f, e) = (self.addr[i], self.addr[i] + self.size[i]);
             syms.push((first, f));
-            if !is_nobits(name) {
+            // (with a linker command file, an empty `.bss` has a ROM address too)
+            if !is_nobits(name) || (self.lcf && name == ".bss" && self.size[i] == 0) {
                 // (a ROM address is aligned for the input sections there were, even when all of them were stripped)
-                syms.push((rom, align(f, widest_input_align(link, name))));
+                syms.push((rom, align(f, widest_input_align(link, name).max(self.forced_align[i]))));
             }
             syms.push((end, e));
         }

@@ -26,13 +26,15 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
         let atom = &link.atoms[a];
         for &s in atom.symbols.iter().filter(|&&s| {
             let sym = obj.sym(s);
-            sym.size > 0 || sym.bind == STB_LOCAL || link.referenced.contains(&(o, s))
+            !obj.lost.contains(&s) && (sym.size > 0 || sym.bind == STB_LOCAL || link.referenced.contains(&(o, s)))
         }) {
             let sym = obj.sym(s);
             let owner = if atom.whole_section { piece.name.clone() } else { obj.sym(atom.symbols[0]).name.clone() };
-            // (the file offset of a symbol without size inside an atom is where the atom ends)
-            let inside = sym.size == 0 && sym.value > atom.start;
-            items.push((atom.out_offset + sym.value - atom.start, sym.size > 0, s, owner,
+            // (the file offset of a symbol without size inside an atom is where the atom ends, and the row follows the
+            // sized symbol at the same address; the `...data.0` mark at the start of a whole section is the exception)
+            let inside = sym.size == 0 && (sym.value > atom.start || !atom.whole_section);
+            let class = if sym.size > 0 { 1 } else if inside { 2 } else { 0 };
+            items.push((atom.out_offset + sym.value - atom.start, class, s, owner,
                         inside.then_some(atom.out_offset + atom.size)));
         }
     }
@@ -52,7 +54,8 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
 
 pub fn write_map(link: &Link, lay: &Layout) -> String {
     let mut out = format!("Link map of {}\n", link.entry);
-    for (i, &name) in ORDER.iter().enumerate() {
+    for &i in &lay.seq {
+        let name = ORDER[i];
         if name == ".got" {
             continue;
         }
@@ -92,7 +95,12 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
         }
     }
     out.push_str("\n\nMemory map:\n                   Starting Size     File\n                   address           Offset\n");
-    for (i, name) in ORDER.iter().enumerate() {
+    for &i in &lay.seq {
+        let name = ORDER[i];
+        // (with a linker command file, an empty `.bss` and `.stack` are not listed)
+        if lay.lcf && lay.size[i] == 0 && matches!(name, ".bss" | ".stack") {
+            continue;
+        }
         out.push_str(&format!("  {:>15}  {:08x} {:08x} {:08x}\n", name, lay.addr[i], lay.size[i], lay.file_off[i]));
     }
     out.push_str("\n\nLinker generated symbols:\n");
