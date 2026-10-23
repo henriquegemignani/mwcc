@@ -391,7 +391,23 @@ impl Link {
                         first.push(a);
                     }
                 }
-                None => first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live)),    // (the last ones marked come first)
+                None => {
+                    // (atoms nothing refers to start the walk; the rest follow in case of cycles)
+                    let mut referenced = vec![false; self.atoms.len()];
+                    for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
+                        for r in self.relocs(a) {
+                            if let Some((t, _)) = self.target(self.atoms[a].obj, r.sym, r.addend) {
+                                if t != a {
+                                    referenced[t] = true;
+                                }
+                            }
+                        }
+                    }
+                    first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live && !referenced[a]));
+                    // (the constructor and destructor lists come after the code and data)
+                    first.sort_by_key(|&a| matches!(output_name(self.section_name(a)), Some(".ctors" | ".dtors")));
+                    first.extend((0..self.atoms.len()).rev().filter(|&a| self.atoms[a].live && referenced[a]));
+                }    // (the last ones marked come first)
             }
             for a in first {
                 if seen[a] || !self.atoms[a].live {
