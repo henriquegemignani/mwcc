@@ -202,7 +202,7 @@ DarkSamus and ScriptGui differ in the ELF (open).
   rebuilt `.comment` is written, and nothing is stripped (unreferenced globals and locals stay). `-strip_partial` applies the normal reachability strip (roots: the entry and `FORCEACTIVE`, locals too) with
   undefined-symbol errors turned off.
 * **LCF section bodies.** `.data : { *(.data) *(extabindex) *(extab) }` merges those input sections into the output
-  section. A command file without `MEMORY` means origin 0. Sections the file does not place are dropped with their atoms.
+  section. A command file without `MEMORY` means origin 0. Sections the file does not place are dropped with their atoms here (the real linker instead reroutes them to another output and warns, which is not replicated).
 * **Generated markers.** When live code refers to `_ctors` or `_dtors`, `.ctors$00/$99` and `.dtors$00/$99` pieces are
   generated (a `.dtors$10` piece, `__destroy_global_chain_reference`, gets a relocation to `__destroy_global_chain`).
   They have section symbols after the locals and global symbols at the end of the symtab; `.comment` header byte 15 is 3
@@ -210,7 +210,7 @@ DarkSamus and ScriptGui differ in the ELF (open).
 * **Symbol table.** An undefined symbol is listed where the first object using it is.
 * **`>>> SYMBOL NOT FOUND` order (map header).** A depth-first walk of the live code: roots are the entry then the
   `FORCEACTIVE` names in order; forced names no object defines come first; leftover live atoms follow in reverse index
-  order. The last rule is not exact (ChozoGhost and 13 others differ); the walk's order for those leftovers is unknown.
+  order. Known gaps from the Opus review: `-r1` and `-r` are not told apart, `-r` with `-lcf` should ignore the file, `_eti_init_info` always goes to `extabindex` (breaks when bodies merge it into `.data`), and a live `.dtors$10` without `__destroy_global_chain` panics; none occurs in the 86 modules. The last rule is not exact (ChozoGhost and 13 others differ); the walk's order for those leftovers is unknown.
 * The map omits "Linker generated symbols" in a partial link.
 
 ## Next

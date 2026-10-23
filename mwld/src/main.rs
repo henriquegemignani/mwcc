@@ -1,7 +1,7 @@
 //! mwld [-nostdlib] -m ENTRY [-map FILE] -o OUTPUT INPUT...: a replica of the GC 2.7 linker (mwldeppc.exe, Metrowerks
 //! Linker 3.0.4), with or without a linker command file (`-lcf`). What it knows was found by linking programs with the
-//! real linker (docs/linker/README.md); it stops with an error on what it does not know: overlays, partial links,
-//! `-sym`, DWARF merging, section bodies in the command file. `-g` and `-mapunused` are accepted and ignored (the
+//! real linker (docs/linker/README.md); it stops with an error on what it does not know: overlays,
+//! `-sym`, DWARF merging. `-g` and `-mapunused` are accepted and ignored (the
 //! map then has no UNUSED rows).
 //!
 //! * An input section is cut into atoms, one per sized symbol (the symbol's alignment is in the object's `.comment`); a
