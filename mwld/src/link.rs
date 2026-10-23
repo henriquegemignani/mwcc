@@ -375,7 +375,7 @@ impl Link {
         let mut stack: Vec<(usize, Vec<Rela>, usize)> = vec![];
         // (a forced name no object has comes first of all)
         for name in &roots {
-            let defined = self.defs.contains_key(name) || self.objs.iter().any(|obj| obj.locals.contains_key(name));
+            let defined = self.defs.contains_key(name);    // (a forced local is a root, and still not found)
             if !defined && names.insert(name.clone()) {
                 self.not_found.push((name.clone(), None));
             }
@@ -392,12 +392,12 @@ impl Link {
                     }
                 }
                 None => {
-                    // (atoms nothing refers to start the walk; the rest follow in case of cycles)
+                    // (what a constructor or destructor list refers to is reached through the list)
                     let mut referenced = vec![false; self.atoms.len()];
                     for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
                         for r in self.relocs(a) {
                             if let Some((t, _)) = self.target(self.atoms[a].obj, r.sym, r.addend) {
-                                if t != a {
+                                if t != a && matches!(output_name(self.section_name(a)), Some(".ctors" | ".dtors")) {
                                     referenced[t] = true;
                                 }
                             }
