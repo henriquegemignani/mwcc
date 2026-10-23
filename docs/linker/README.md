@@ -194,13 +194,12 @@ before tokenizing). `-fp`, `-nodefaults`, `-sdata`, `-sdata2`, `-g`, `-mapunused
 The game's REL modules are linked twice (`build.ninja`): `.preplf` is `-sdata 0 -sdata2 0 -r` on the module's objects, and
 `.plf` is `-sdata 0 -sdata2 0 -r1 -lcf <module>/ldscript.lcf -m _prolog -strip_partial` on the objects plus
 `REL_Setup.o` (and usually `global_destructor_chain.o`). Both need the objects in the order of `build.ninja`.
-`tools/lcf_oracle.py --cwd <echoes> ...` runs them. Of the 86 modules, all 86 `.preplf` and 69 `.plf` links are
-byte-identical in ELF and map; 14 more have an identical ELF and differ only in the map's `SYMBOL NOT FOUND` order, and
+`tools/lcf_oracle.py --cwd <echoes> ...` runs them. Of the 86 modules, 75 `.preplf` ELFs (the rest are open; the
+plain `-r` map has no entry point to compare) and 69 `.plf` links are byte-identical in ELF and map; 14 more have an identical ELF and differ only in the map's `SYMBOL NOT FOUND` order, and
 DarkSamus and ScriptGui differ in the ELF (open).
 
 * **`-r` / `-r1`** make an ET_REL file: addresses are 0, every relocation is kept (symbol indices remapped), a
-  rebuilt `.comment` is written, and nothing is stripped. In plain `-r`, global sized data nothing references is
-  dropped. `-strip_partial` applies the normal reachability strip (roots: the entry and `FORCEACTIVE`, locals too) with
+  rebuilt `.comment` is written, and nothing is stripped (unreferenced globals and locals stay). `-strip_partial` applies the normal reachability strip (roots: the entry and `FORCEACTIVE`, locals too) with
   undefined-symbol errors turned off.
 * **LCF section bodies.** `.data : { *(.data) *(extabindex) *(extab) }` merges those input sections into the output
   section. A command file without `MEMORY` means origin 0. Sections the file does not place are dropped with their atoms.

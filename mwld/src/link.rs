@@ -411,24 +411,6 @@ impl Link {
     fn strip(&mut self) -> R<()> {
         if self.partial && !self.strip_partial {
             self.atoms.iter_mut().for_each(|a| a.live = true);
-            // (unreferenced global data with sized symbols is dropped even here)
-            let mut used = vec![false; self.atoms.len()];
-            for a in 0..self.atoms.len() {
-                for r in self.relocs(a) {
-                    if let Some((t, _)) = self.target(self.atoms[a].obj, r.sym, r.addend) {
-                        used[t] = true;
-                    }
-                }
-            }
-            for a in 0..self.atoms.len() {
-                let atom = &self.atoms[a];
-                let o = atom.obj;
-                let name = &self.objs[o].elf.sections[atom.sec].name;
-                let data = output_name(name).map_or(false, |n| !matches!(n, ".text" | ".init" | ".ctors" | ".dtors"));
-                if data && !used[a] && !atom.whole_section && atom.symbols.iter().any(|&s| sized(self.objs[o].sym(s))) {
-                    self.atoms[a].live = false;
-                }
-            }
             self.discover();
             self.record_references();
             return Ok(());
