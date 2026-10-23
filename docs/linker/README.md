@@ -189,11 +189,35 @@ before tokenizing). `-fp`, `-nodefaults`, `-sdata`, `-sdata2`, `-g`, `-mapunused
   local. An unsized symbol inside an atom that has a sized symbol gets the atom's end as its file offset, and its
   row goes after the sized symbol's, even when it is at the atom's start.
 
+## Partial links and the REL modules
+
+The game's REL modules are linked twice (`build.ninja`): `.preplf` is `-sdata 0 -sdata2 0 -r` on the module's objects, and
+`.plf` is `-sdata 0 -sdata2 0 -r1 -lcf <module>/ldscript.lcf -m _prolog -strip_partial` on the objects plus
+`REL_Setup.o` (and usually `global_destructor_chain.o`). Both need the objects in the order of `build.ninja`.
+`tools/lcf_oracle.py --cwd <echoes> ...` runs them. Of the 86 modules, all 86 `.preplf` and 69 `.plf` links are
+byte-identical in ELF and map; 14 more have an identical ELF and differ only in the map's `SYMBOL NOT FOUND` order, and
+DarkSamus and ScriptGui differ in the ELF (open).
+
+* **`-r` / `-r1`** make an ET_REL file: addresses are 0, every relocation is kept (symbol indices remapped), a
+  rebuilt `.comment` is written, and nothing is stripped. In plain `-r`, global sized data nothing references is
+  dropped. `-strip_partial` applies the normal reachability strip (roots: the entry and `FORCEACTIVE`, locals too) with
+  undefined-symbol errors turned off.
+* **LCF section bodies.** `.data : { *(.data) *(extabindex) *(extab) }` merges those input sections into the output
+  section. A command file without `MEMORY` means origin 0. Sections the file does not place are dropped with their atoms.
+* **Generated markers.** When live code refers to `_ctors` or `_dtors`, `.ctors$00/$99` and `.dtors$00/$99` pieces are
+  generated (a `.dtors$10` piece, `__destroy_global_chain_reference`, gets a relocation to `__destroy_global_chain`).
+  They have section symbols after the locals and global symbols at the end of the symtab; `.comment` header byte 15 is 3
+  and their entries have alignment 4.
+* **Symbol table.** An undefined symbol is listed where the first object using it is.
+* **`>>> SYMBOL NOT FOUND` order (map header).** A depth-first walk of the live code: roots are the entry then the
+  `FORCEACTIVE` names in order; forced names no object defines come first; leftover live atoms follow in reverse index
+  order. The last rule is not exact (ChozoGhost and 13 others differ); the walk's order for those leftovers is unknown.
+* The map omits "Linker generated symbols" in a partial link.
+
 ## Next
 
-1. `-opt_partial`, `-r`, `-strip_partial` and section bodies in the linker command file (`*(.data)`), which the
-   REL modules need: `FUN_00436b90` and its callers in Ghidra are the place to read what the real linker does with
-   the sections of a link.
-2. Port the hook generator.
-3. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
+1. The residuals above: the leftover-phase `SYMBOL NOT FOUND` order, and the DarkSamus/ScriptGui ELF differences.
+2. `-opt_partial`.
+3. Port the hook generator.
+4. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
    string table gives the file names and function boundaries for the former.
