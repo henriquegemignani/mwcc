@@ -214,8 +214,18 @@ impl Layout {
                                                              gen_symbol("_bss_init_info", copy_size, bss_size, 1)]));
         }
         let n = ORDER.len();
-        let seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
+        let mut seq: Vec<usize> = plan.seq.iter().map(|s| s.0).collect();
         let has_contents = |i: usize| has_contents(&pieces, i);
+        // (a partial link lists, after the file's sections, an output section the file does not place when an object has
+        // input for it, even when all of that input is dead)
+        if plan.lcf && plan.partial {
+            for i in 0..n {
+                if !seq.contains(&i) && !has_contents(i)
+                    && link.objs.iter().any(|o| o.elf.sections.iter().any(|s| !s.synthetic && output_name(&s.name) == Some(ORDER[i]))) {
+                    seq.push(i);
+                }
+            }
+        }
         if let Some(i) = (0..n).find(|&i| has_contents(i) && !seq.contains(&i)) {
             let place = if plan.lcf { "the linker command file does not place" } else { "the link has no place for" };
             return Err(format!("{place} the section '{}'", ORDER[i]));

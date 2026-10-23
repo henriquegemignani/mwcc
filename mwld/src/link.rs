@@ -345,6 +345,13 @@ impl Link {
         self.objs[a.obj].relocs.get(&a.sec).into_iter().flatten().filter(|r| a.contains(r.offset)).cloned().collect()
     }
 
+    /// The relocations of an atom by offset (the order the linker follows them in, whatever the object's table says).
+    fn relocs_in_order(&self, atom: usize) -> Vec<Rela> {
+        let mut relocs = self.relocs(atom);
+        relocs.sort_by_key(|r| r.offset);
+        relocs
+    }
+
     pub fn section_name(&self, atom: usize) -> &str {
         let a = &self.atoms[atom];
         &self.objs[a.obj].elf.sections[a.sec].name
@@ -391,7 +398,7 @@ impl Link {
                     continue;
                 }
                 seen[a] = true;
-                stack.push((a, self.relocs(a), 0));
+                stack.push((a, self.relocs_in_order(a), 0));
                 while let Some((cur, relocs, i)) = stack.last_mut() {
                     let Some(r) = relocs.get(*i).cloned() else {
                         stack.pop();
@@ -402,7 +409,7 @@ impl Link {
                     if let Some((t, _)) = self.target(obj, r.sym, r.addend) {
                         if !seen[t] && self.atoms[t].live {
                             seen[t] = true;
-                            let rel = self.relocs(t);
+                            let rel = self.relocs_in_order(t);
                             stack.push((t, rel, 0));
                         }
                     } else {
