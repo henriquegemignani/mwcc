@@ -392,12 +392,12 @@ impl Link {
                     }
                 }
                 None => {
-                    // (what a constructor or destructor list refers to is reached through the list)
+                    // (what code or data names through a local symbol is reached through that code or data)
                     let mut referenced = vec![false; self.atoms.len()];
                     for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
                         for r in self.relocs(a) {
                             if let Some((t, _)) = self.target(self.atoms[a].obj, r.sym, r.addend) {
-                                if t != a && matches!(output_name(self.section_name(a)), Some(".ctors" | ".dtors")) {
+                                if t != a && self.objs[self.atoms[a].obj].sym(r.sym).bind == STB_LOCAL {
                                     referenced[t] = true;
                                 }
                             }
