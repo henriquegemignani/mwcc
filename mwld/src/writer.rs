@@ -56,22 +56,29 @@ impl SecHeader {
     }
 }
 
-/// The live (size word, atom, offset) entries of an object's .mwcats.text.
-fn cats_entries(link: &Link, o: usize) -> Vec<([u8; 4], usize, u32)> {
+/// The live (size word, atom, offset) entries of one `.mwcats.text` section of an object.
+fn cats_entries_in(link: &Link, o: usize, index: usize) -> Vec<([u8; 4], usize, u32)> {
     let obj = &link.objs[o];
-    let section = obj.elf.section(".mwcats.text").unwrap();
+    let section = &obj.elf.sections[index];
     let relas = obj.elf.relocs(section.index);
     let mut out = vec![];
     for i in 0..section.data.len() / 8 {
         let target = relas.iter().filter(|r| r.offset as usize == 8 * i + 4)
             .last().and_then(|r| link.target(o, r.sym, r.addend));
         if let Some((atom, offset)) = target {
-            if link.atoms[atom].live {
+            // (an entry for code that another object's definition replaced is dropped)
+            if link.atoms[atom].live && link.atoms[atom].obj == o {
                 out.push((section.data[8 * i..8 * i + 4].try_into().unwrap(), atom, offset));
             }
         }
     }
     out
+}
+
+/// The live entries of an object's `.mwcats.text` sections (an object has one for each of its code sections).
+fn cats_entries(link: &Link, o: usize) -> Vec<([u8; 4], usize, u32)> {
+    let sections = &link.objs[o].elf.sections;
+    (0..sections.len()).filter(|&i| sections[i].name == ".mwcats.text").flat_map(|i| cats_entries_in(link, o, i)).collect()
 }
 
 /// The relocations kept in the output, by output section: those of the objects with a `.mwcats.text` or `.note.split`.
@@ -81,7 +88,8 @@ fn retained_relocs(link: &Link, lay: &Layout) -> Vec<Vec<Retained>> {
         for piece in &lay.pieces[i] {
             if piece.obj.map_or(false, |o| link.partial || link.objs[o].keeps_relocs()) {
                 for &a in &piece.atoms {
-                    for r in link.relocs(a) {
+                    let lost = link.overridden(a);
+                    for r in link.relocs(a).into_iter().filter(|r| !lost.iter().any(|&(lo, hi)| (lo..hi).contains(&r.offset))) {
                         out[i].push((a, r.offset, r.sym, r.kind, r.addend));
                     }
                 }
@@ -115,7 +123,8 @@ fn apply_relocs(link: &Link, lay: &Layout, data: &mut [Vec<u8>]) -> R<()> {
         for piece in &lay.pieces[i] {
             for &a in &piece.atoms {
                 let atom = &link.atoms[a];
-                for r in link.relocs(a) {
+                let lost = link.overridden(a);
+                for r in link.relocs(a).into_iter().filter(|r| !lost.iter().any(|&(lo, hi)| (lo..hi).contains(&r.offset))) {
                     let (s, tsec) = symbol_addr(link, lay, atom.obj, r.sym, r.addend)?;
                     let section_symbol = link.objs[atom.obj].sym(r.sym).typ == STT_SECTION;
                     let value = if section_symbol { s } else { s.wrapping_add(r.addend as u32) };
@@ -200,7 +209,7 @@ fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> S
                     }
                     entries.push(section_symbol(lay, o, section));
                 }
-            } else if section.name == ".mwcats.text" && cats.contains(&o) {
+            } else if section.name == ".mwcats.text" && cats.contains(&o) && !cats_entries_in(link, o, section.index).is_empty() {
                 if let Some(sym) = sym {
                     new_index[o].insert(sym.index, entries.len());
                 }
@@ -227,10 +236,8 @@ fn symbol_table(link: &Link, lay: &Layout, cats: &[usize], cats_shndx: u16) -> S
         entries.push(Ent { name: String::new(), value: piece.addr, size: 0, info: STT_SECTION, shndx: sec_of(oi(".init")) });
     }
     for name in [".ctors", ".dtors"] {
-        for tag in ["$00", "$99"] {
-            if let Some(piece) = lay.pieces[oi(name)].iter().find(|p| p.name == format!("{name}{tag}")) {
-                entries.push(Ent { name: String::new(), value: piece.addr, size: 0, info: STT_SECTION, shndx: sec_of(oi(name)) });
-            }
+        for piece in lay.pieces[oi(name)].iter().filter(|p| p.obj.is_none()) {
+            entries.push(Ent { name: String::new(), value: piece.addr, size: 0, info: STT_SECTION, shndx: sec_of(oi(name)) });
         }
     }
     let first_global = entries.len();
@@ -399,6 +406,9 @@ fn section_contents(link: &Link, lay: &Layout) -> R<Vec<Vec<u8>>> {
                     let (from, to) = (atom.start as usize, atom.out_offset as usize);
                     let bytes = section.data.get(from..from + atom.size as usize).ok_or("a symbol lies outside its section")?;
                     buf[to..to + atom.size as usize].copy_from_slice(bytes);
+                    for (lo, hi) in link.overridden(a) {
+                        buf[to + (lo - atom.start) as usize..to + (hi - atom.start) as usize].fill(0);
+                    }
                 }
             }
         }
@@ -406,6 +416,9 @@ fn section_contents(link: &Link, lay: &Layout) -> R<Vec<Vec<u8>>> {
     }
     if !link.partial {
         apply_relocs(link, lay, &mut data)?;
+    }
+    if link.hook_gen {
+        write_hooks(link, lay, &mut data);
     }
     if link.rom_ref {
         write_init_info(lay, &mut data);
@@ -417,6 +430,18 @@ fn section_contents(link: &Link, lay: &Layout) -> R<Vec<Vec<u8>>> {
 }
 
 /// `_rom_copy_info` and `_bss_init_info`: where each section with contents is copied from, and which sections to clear.
+/// The linker's own hook pieces hold the addresses of the runtime functions.
+fn write_hooks(link: &Link, lay: &Layout, data: &mut [Vec<u8>]) {
+    for (reference, section, _, function) in crate::link::HOOK_REFERENCES {
+        let (Some(at), Some(&(o, s))) = (lay.gen_addr(reference), link.defs.get(function)) else { continue };
+        let Some(atom) = link.atom_of(o, link.objs[o].sym(s)) else { continue };
+        let address = atom.where_(link.objs[o].sym(s).value);
+        let i = oi(section);
+        let offset = (at - lay.addr[i]) as usize;
+        data[i][offset..offset + 4].copy_from_slice(&address.to_be_bytes());
+    }
+}
+
 fn write_init_info(lay: &Layout, data: &mut [Vec<u8>]) {
     let init = oi(".init");
     let at = (lay.gen_addr("_rom_copy_info").unwrap() - lay.addr[init]) as usize;

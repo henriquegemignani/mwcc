@@ -149,7 +149,7 @@ add when the runtime's functions are not defined by an object; the replica does 
 those pieces (a link with a constructor but no `__init_cpp_exceptions.o` is not reproduced).
 
 What it does not know (the replica stops, or is untested): `-opt_partial` and the other partial
-links, `-sym` and DWARF merging, `-romaddr`, overlays, `-listclosure`, `-g` and `-mapunused` (accepted and ignored, so the map has no UNUSED rows), multiply-defined and other error
+links, `-sym` and DWARF merging, `-romaddr`, overlays, `-listclosure`, `-g` (accepted and ignored), multiply-defined and other error
 messages (it prints only the first undefined symbol), and a library search (`-l`, `MWLibraries`). Objects with no
 `.comment` section, such as `mwasmeppc.exe`'s, are refused: one linked differently (the real linker kept less of the
 runtime, and ordered the symbols by another rule) and its alignments and flags are unknown. The tests use the 2.7
@@ -230,10 +230,35 @@ merge it into `.data`), `.mwcats.text` is not carried in partial links, some `.d
 exception tables differ, and partial relocations keep their original addend (wrong for section-symbol relocations
 into a section with dead atoms).
 
+## Metroid Prime (GM8E01_00, the 2.7 build)
+
+The `main.elf` link of 826 objects is identical to the real linker's, ELF and map (with `-mapunused`). What it needed
+beyond the Echoes build:
+
+* **Runtimes without the `$10`/`$15` suffixes.** Prime's `__init_cpp_exceptions.o` and `global_destructor_chain.o` keep
+  their hooks in plain `.ctors` and `.dtors`. The linker then drops those input pieces (the strip roots still mark the
+  functions they name) and makes `.ctors$10` (`__init_cpp_exceptions_reference`), `.dtors$10`
+  (`__destroy_global_chain_reference`) and `.dtors$15` (`__fini_cpp_exceptions_reference`) itself: 4 bytes each, holding
+  the function's address, no relocation. All its pieces have section symbols.
+* **A name that FORCEACTIVE lists counts as referenced**, so an entry such as `_savegpr_17` inside `__save_gpr` is a
+  map row and an output symbol even when no object calls it.
+* **Several `.mwcats.text` sections per object** (one per code section): the entries of all of them are carried, a
+  section symbol is made for each that has a live entry, and an entry for code another object's weak definition
+  replaced is dropped.
+* **Overridden weak data in a live atom** (a vtable another object defines too, inside a whole-section `.data`): the
+  bytes stay but are zero, and its relocations are not emitted.
+* **`-mapunused`** adds a row `UNUSED <size> ........ ........    <name> <object>` for each sized symbol of a dead atom
+  in a live object's section, in the object's own order, and for each global without size inside live code that
+  nothing refers to (the `_savefpr_N` entries).
+
+NESemuP: both partial links give the same ELF as the real linker; the `.plf` map lists three names (`_savegpr_29`,
+`__cvt_fp2unsigned`, `_restgpr_29`, all from `emusound.o`) earlier than the real one does, and the `.preplf` map has the
+known walk-order difference.
+
 ## Next
 
 1. The plain `-r` walk order (the 11 `.preplf` ELFs and all `.preplf` maps).
 2. `-opt_partial`.
-3. Port the hook generator.
+3. The not-found order of the NESemuP `.plf` map (see above).
 4. Decide between a matching decompilation (this repo's style, with `src/linker/`) and keeping the replica; the
    string table gives the file names and function boundaries for the former.

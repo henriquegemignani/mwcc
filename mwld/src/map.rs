@@ -18,12 +18,26 @@ fn owner(link: &Link, piece: &Piece) -> String {
     piece.obj.map_or_else(|| GENERATED.to_string(), |o| link.objs[o].label())
 }
 
-fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Option<u32>) -> Vec<String> {
+fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Option<u32>, unused: bool) -> Vec<String> {
     let Some(o) = piece.obj else { return vec![] };
     let obj = &link.objs[o];
-    let mut items = vec![];
+    // (position among the object's atoms, sort key, text); the rows of dead atoms are the ones `-mapunused` adds
+    let mut items: Vec<(u32, (u32, u8, usize), String)> = vec![];
+    let mut live = vec![];
     for &a in &piece.atoms {
         let atom = &link.atoms[a];
+        if unused {
+            // (a global without size inside live code that nothing refers to, such as `_savefpr_14`)
+            for &s in atom.symbols.iter().filter(|&&s| {
+                let sym = obj.sym(s);
+                !obj.lost.contains(&s) && !(sym.size > 0 || sym.bind == STB_LOCAL || link.referenced.contains(&(o, s)))
+            }) {
+                let sym = obj.sym(s);
+                items.push((atom.start, (atom.out_offset + sym.value - atom.start, 2, s),
+                            format!("  UNUSED   {:06x} ........ ........    {} {}
+", 0, sym.name, obj.label())));
+            }
+        }
         for &s in atom.symbols.iter().filter(|&&s| {
             let sym = obj.sym(s);
             !obj.lost.contains(&s) && (sym.size > 0 || sym.bind == STB_LOCAL || link.referenced.contains(&(o, s)))
@@ -34,25 +48,42 @@ fn symbol_rows(link: &Link, lay: &Layout, i: usize, piece: &Piece, file_off: Opt
             // sized symbol at the same address; a `...` mark at the start of a whole section is the exception)
             let inside = sym.size == 0 && (sym.value > atom.start || !atom.whole_section);
             let class = if sym.size > 0 { 1 } else if inside { 2 } else { 0 };
-            items.push((atom.out_offset + sym.value - atom.start, class, s, owner,
-                        inside.then_some(atom.out_offset + atom.size)));
+            live.push((atom.start, atom.out_offset + sym.value - atom.start, class, s, owner,
+                       inside.then_some(atom.out_offset + atom.size)));
         }
     }
-    items.sort_by_key(|i| (i.0, i.1, i.2));
-    items.iter().map(|(off, _, s, owner, end)| {
-        let (off, s) = (*off, *s);
+    for (start, off, class, s, owner, end) in live {
         let sym = obj.sym(s);
         let fo = file_off.unwrap_or(lay.file_off[i] + end.unwrap_or(off));
-        if sym.size == 0 {
-            format!("  {off:08x} {:06x} {:08x} {fo:08x}    {} (entry of {}) \t{}\n", 0, lay.addr[i] + off, sym.name,
+        let text = if sym.size == 0 {
+            format!("  {off:08x} {:06x} {:08x} {fo:08x}    {} (entry of {}) 	{}
+", 0, lay.addr[i] + off, sym.name,
                     owner, obj.label())
         } else {
             row(off, sym.size, lay.addr[i] + off, fo, obj.aligns[s].max(1), &sym.name, &obj.label())
+        };
+        items.push((start, (off, class, s), text));
+    }
+    if unused {
+        if let Some(sec) = &piece.sec {
+            for &a in obj.atoms.get(&sec.index).into_iter().flatten().filter(|&&a| !link.atoms[a].live) {
+                let atom = &link.atoms[a];
+                for &s in &atom.symbols {
+                    let sym = obj.sym(s);
+                    if sym.size > 0 && !obj.lost.contains(&s) {
+                        items.push((atom.start, (sym.value, 0, s),
+                                    format!("  UNUSED   {:06x} ........ ........    {} {}
+", sym.size, sym.name, obj.label())));
+                    }
+                }
+            }
         }
-    }).collect()
+    }
+    items.sort_by_key(|i| (i.0, i.1));
+    items.into_iter().map(|i| i.2).collect()
 }
 
-pub fn write_map(link: &Link, lay: &Layout) -> String {
+pub fn write_map(link: &Link, lay: &Layout, unused: bool) -> String {
     let mut out = format!("Link map of {}\n", link.entry);
     if link.partial {
         // the names nothing defines, in the order the linker came across them
@@ -86,7 +117,7 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
                 out.push_str(&row(piece.start + g.offset, g.size, piece.addr + g.offset,
                                   lay.file_off[i] + piece.start + g.offset, 4, &g.name, &who));
             }
-            out.extend(symbol_rows(link, lay, i, piece, None));
+            out.extend(symbol_rows(link, lay, i, piece, None, unused));
         }
     }
     // the exception table index, listed again after the others, when there is one
@@ -95,7 +126,7 @@ pub fn write_map(link: &Link, lay: &Layout) -> String {
         let ex = oi("extabindex");
         let end_off = lay.file_off[ex] + lay.size[ex];
         for piece in &lay.pieces[ex] {
-            out.extend(symbol_rows(link, lay, ex, piece, Some(end_off)));
+            out.extend(symbol_rows(link, lay, ex, piece, Some(end_off), unused));
             let who = owner(link, piece);
             for g in &piece.gen {
                 out.push_str(&row(piece.start + g.offset, g.size, piece.addr + g.offset, end_off, 4, &g.name, &who));

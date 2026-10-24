@@ -1,7 +1,7 @@
 //! mwld [-nostdlib] -m ENTRY [-map FILE] -o OUTPUT INPUT...: a replica of the GC 2.7 linker (mwldeppc.exe, Metrowerks
 //! Linker 3.0.4), with or without a linker command file (`-lcf`). What it knows was found by linking programs with the
 //! real linker (docs/linker/README.md); it stops with an error on what it does not know: overlays,
-//! `-sym`, DWARF merging. `-g` and `-mapunused` are accepted and ignored (the
+//! `-sym`, DWARF merging. `-g` is accepted and ignored; `-mapunused` adds the UNUSED rows to the map (the
 //! map then has no UNUSED rows).
 //!
 //! * An input section is cut into atoms, one per sized symbol (the symbol's alignment is in the object's `.comment`); a
@@ -24,6 +24,7 @@ fn read_text(path: &str) -> elf::R<String> {
 
 fn run(args: &[String]) -> elf::R<()> {
     let (mut entry, mut map_file, mut output, mut inputs) = ("__start".to_string(), None, "a.out".to_string(), vec![]);
+    let mut map_unused = false;
     let mut lcf: Option<String> = None;
     let mut partial = false;
     let mut generate = false;
@@ -61,7 +62,8 @@ fn run(args: &[String]) -> elf::R<()> {
             "-fp" | "-sdata" | "-sdata2" => {
                 value()?;
             }
-            "-nostdlib" | "-nodefaults" | "-g" | "-mapunused" => {}
+            "-nostdlib" | "-nodefaults" | "-g" => {}
+            "-mapunused" => map_unused = true,
             _ if a.starts_with('-') => return Err(format!("unsupported option '{a}'")),
             _ => inputs.push(a.to_string()),
         }
@@ -84,7 +86,7 @@ fn run(args: &[String]) -> elf::R<()> {
     let image = writer::build(&linked, &lay)?;
     std::fs::write(&output, image).map_err(|e| format!("{output}: {e}"))?;
     if let Some(path) = map_file {
-        std::fs::write(&path, elf::to_latin1(&map::write_map(&linked, &lay))).map_err(|e| format!("{path}: {e}"))?;
+        std::fs::write(&path, elf::to_latin1(&map::write_map(&linked, &lay, map_unused))).map_err(|e| format!("{path}: {e}"))?;
     }
     Ok(())
 }

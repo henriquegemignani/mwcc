@@ -194,6 +194,11 @@ impl Layout {
                     let at = found.iter().rposition(|p| p.name == ".dtors$10").map_or(found.len(), |k| k + 1);
                     found.insert(at, gen_piece(".dtors$10", vec![gen_symbol("__destroy_global_chain_reference", 0, 4, 1)]));
                 }
+                if link.hook_gen {
+                    for (k, h) in crate::link::HOOK_REFERENCES.iter().filter(|h| h.1 == name).enumerate() {
+                        found.insert(1 + k, gen_piece(h.2, vec![gen_symbol(h.0, 0, 4, 1)]));
+                    }
+                }
                 found.push(gen_piece(&format!("{name}$99"), vec![gen_symbol(format!("{sym}$99"), 0, 4, 1)]));
             }
             if name == "extabindex" && link.eh {

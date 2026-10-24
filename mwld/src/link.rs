@@ -122,6 +122,13 @@ impl Obj {
     }
 }
 
+/// The runtime's hook references: (symbol, output section, piece, the function it refers to).
+pub const HOOK_REFERENCES: [(&str, &str, &str, &str); 3] = [
+    ("__init_cpp_exceptions_reference", ".ctors", ".ctors$10", "__init_cpp_exceptions"),
+    ("__destroy_global_chain_reference", ".dtors", ".dtors$10", "__destroy_global_chain"),
+    ("__fini_cpp_exceptions_reference", ".dtors", ".dtors$15", "__fini_cpp_exceptions"),
+];
+
 pub struct Link {
     pub entry: String,
     pub objs: Vec<Obj>,
@@ -129,6 +136,7 @@ pub struct Link {
     pub defs: HashMap<String, (usize, usize)>,
     pub eh: bool,           // some exception table (extabindex) is live
     pub eti_ref: bool,      // some live code refers to `_eti_init_info`
+    pub hook_gen: bool,     // the runtime's unsuffixed `.ctors`/`.dtors` hooks were replaced by the linker's own pieces
     pub rom_ref: bool,      // some live code refers to `_rom_copy_info` or `_bss_init_info`
     pub partial: bool,                  // `-r`: relocatable output, nothing is stripped unless `-strip_partial`
     pub strip_partial: bool,
@@ -165,7 +173,7 @@ fn mark(atoms: &mut [Atom], work: &mut Vec<usize>, a: usize) {
 impl Link {
     pub fn new(entry: &str, inputs: &[String], plan: &crate::layout::Plan) -> R<Link> {
         let mut link = Link { entry: entry.into(), objs: vec![], atoms: vec![], defs: HashMap::new(), eh: false,
-                                eti_ref: false, rom_ref: false, partial: plan.partial, strip_partial: plan.strip_partial,
+                                eti_ref: false, rom_ref: false, hook_gen: false, partial: plan.partial, strip_partial: plan.strip_partial,
                                 unplaced: plan.unplaced(), not_found: vec![], linker_refs: HashSet::new(),
                                 referenced: HashSet::new(),
                                 force_active: plan.force_active.clone(),
@@ -328,6 +336,15 @@ impl Link {
         defined(s) && !self.objs[o].lost.contains(&s.index) && (s.size > 0 || self.referenced.contains(&(o, s.index)))
     }
 
+    /// The byte ranges (in the section) of the weak definitions another object overrides that lie in atom `a`: the linker
+    /// leaves them zero and drops their relocations, though the atom keeps their room.
+    pub fn overridden(&self, a: usize) -> Vec<(u32, u32)> {
+        let atom = &self.atoms[a];
+        let obj = &self.objs[atom.obj];
+        obj.lost.iter().map(|&s| obj.sym(s)).filter(|s| s.shndx as usize == atom.sec && s.size > 0 && atom.contains(s.value))
+            .map(|s| (s.value, s.value + s.size)).collect()
+    }
+
     /// The (atom, offset in its section) a relocation against symbol + addend reaches.
     pub fn target(&self, obj: usize, sym: usize, addend: i32) -> Option<(usize, u32)> {
         let (o, si) = self.lookup(obj, sym)?;
@@ -359,6 +376,9 @@ impl Link {
 
     /// Notes the symbols the live code refers to.
     fn record_references(&mut self) {
+        // (a name the linker command file forces counts as referenced)
+        let forced: Vec<(usize, usize)> = self.force_active.iter().filter_map(|n| self.defs.get(n).copied()).collect();
+        self.referenced.extend(forced);
         for a in (0..self.atoms.len()).filter(|&a| self.atoms[a].live) {
             for r in self.relocs(a) {
                 let found = self.lookup(self.atoms[a].obj, r.sym);
@@ -445,6 +465,19 @@ impl Link {
         }
     }
 
+    /// A runtime built without the `$10` and `$15` suffixes has the hook references in plain `.ctors` and `.dtors`; the
+    /// linker generates those pieces itself and leaves these out.
+    fn is_hook(&self, o: usize, a: usize) -> bool {
+        let atom = &self.atoms[a];
+        let obj = &self.objs[o];
+        matches!(obj.elf.sections[atom.sec].name.as_str(), ".ctors" | ".dtors")
+            && atom.symbols.iter().any(|&s| HOOK_REFERENCES.iter().any(|h| h.0 == obj.sym(s).name))
+            && atom.symbols.iter().all(|&s| {
+                let name = &obj.sym(s).name;
+                name.is_empty() || HOOK_REFERENCES.iter().any(|h| h.0 == name)
+            })
+    }
+
     fn strip(&mut self) -> R<()> {
         if self.partial && !self.strip_partial {
             self.atoms.iter_mut().for_each(|a| a.live = true);
@@ -507,6 +540,11 @@ impl Link {
                     // symbols is dropped like any other; so are the constructors and destructors of a dead object)
                     let bare = atom.whole_section && atom.size > 0
                         && !atom.symbols.iter().any(|&s| sized(self.objs[o].sym(s)));
+                    // (a runtime built without the `$10` and `$15` suffixes has the hook references in plain `.ctors`
+                    // and `.dtors`; the linker generates those pieces itself and leaves these out)
+                    if self.is_hook(o, a) {
+                        continue;
+                    }
                     if (bare || matches!(output_name(section), Some(".ctors") | Some(".dtors")))
                         && !atom.symbols.iter().any(|s| self.objs[o].lost.contains(s)) {
                         mark(&mut self.atoms, &mut work, a);
@@ -526,6 +564,13 @@ impl Link {
             }
             if work.is_empty() {
                 break;
+            }
+        }
+        // (the roots above marked those hook atoms; they only needed to keep the functions they refer to)
+        for a in 0..self.atoms.len() {
+            if self.atoms[a].live && self.is_hook(self.atoms[a].obj, a) {
+                self.atoms[a].live = false;
+                self.hook_gen = true;
             }
         }
         let live = |a: &&Atom| a.live;
