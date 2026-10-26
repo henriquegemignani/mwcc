@@ -27,6 +27,13 @@ Supported versions:
 - `GC_1_3_2`: GameCube 1.3.2 (split and relinked; no sources of its own)
 - `GC_2_7`: GameCube 2.7 (split and relinked from 1.3.2's symbols; no sources of its own, see `docs/gc27-differences.md`)
 
+And of the linker, `mwldeppc.exe`:
+
+- `LD_2_6`: GameCube 2.6's linker, 97% the same code as 2.0's and 2.5's (split and relinked; its driver, C library and runtime
+  are the 2.7 compiler's, see `docs/linker/decompilation.md`)
+- `LD_1_0`: GameCube 1.0's linker (split and relinked; its driver, C library and runtime are the 1.0 compiler's, see
+  `docs/linker/decompilation.md`)
+
 Dependencies
 ============
 
@@ -86,6 +93,7 @@ Project structure
   decompiled)
 - `config/<version>/bindings.json`: the addresses of the data and functions the sources reference
 - `config/lmgr326b.def`: the FLEXlm library the compiler imports by ordinal
+- `config/LD_<version>/`: a linker, as a version's folder is, built with the shared sources of its `compiler_version`
 - `src/`: the compiler (`driver`, `frontend`, `optimizer`, `backend`) and its statically linked C library and
   runtime (`msl`, `runtime`: one source per object of the original, which builds the library's source of it)
 - `include/`: headers; `include/libc` is the C library as the compiler's sources see it

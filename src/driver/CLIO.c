@@ -140,6 +140,42 @@ unsigned char clear_global_byte(void)
     return 1U;
 }
 
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+/* 2.x: the lines end at the buffer's end, not at a 0 */
+static inline Boolean writeBufferLines(struct _FILE *fp, StorageHandle *bufp, char *cursor, SInt32 len)
+{
+    char *lineEnd;
+    char *end;
+    SInt32 lineLength;
+    if (len <= 0)
+        return 1;
+    else {
+        end = bufp->data + len;
+        while (cursor < end) {
+            lineEnd = cursor;
+            while (lineEnd < end && *lineEnd != '\n' && *lineEnd != '\r')
+                lineEnd++;
+            lineLength = lineEnd - cursor;
+            if (lineLength != 0) {
+                if (fwrite(cursor, lineLength, 1, fp) != 1) {
+                    CLErrors_ReportFormattedOSError(10, CLIO_ERRNO);
+                    return 0;
+                }
+            }
+            if (fn_004151f0())
+                break;
+            if (fwrite("\r\n", 2, 1, fp) != 1) {
+                CLErrors_ReportFormattedOSError(10, CLIO_ERRNO);
+                return 0;
+            }
+            if (lineEnd < end && *lineEnd++ == '\r' && *lineEnd == '\n')
+                lineEnd++;
+            cursor = lineEnd;
+        }
+    }
+    return 1;
+}
+#else
 static inline Boolean writeBufferLines(struct _FILE *fp, StorageHandle *bufp, char *cursor, SInt32 len)
 {
     char *lineEnd;
@@ -173,6 +209,7 @@ static inline Boolean writeBufferLines(struct _FILE *fp, StorageHandle *bufp, ch
     }
     return 1;
 }
+#endif
 
 Boolean write_text_buffer(struct _FILE *fp, StorageHandle *bufp, SInt32 len)
 {
@@ -182,7 +219,11 @@ Boolean write_text_buffer(struct _FILE *fp, StorageHandle *bufp, SInt32 len)
         setvbuf(fp, NULL, 2, 0x1000);
     fn_00413a00(bufp);
     cursor = bufp->data;
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+    if (len != 0 && cursor[len - 1] == 0)
+#else
     if (cursor[len - 1] == 0)
+#endif
         len--;
     ok = writeBufferLines(fp, bufp, cursor, len);
     fn_00413a50(bufp);
@@ -469,12 +510,27 @@ unsigned int write_text_to_stdout_or_stderr(int unused, short messageType, const
         if (*lineEnd != 0) {
             data_0054b988 += 1;
             fwrite("\r\n", 2, 1, output);
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+            /* 2.x: one line end (\r, \n or \r\n) at a time, and a last lone one */
+            if (*lineEnd == '\r')
+                ++lineEnd;
+            if (*lineEnd == '\n')
+                ++lineEnd;
+            if (lineEnd[0] != 0 && lineEnd[1] == 0 && (lineEnd[0] == '\n' || lineEnd[0] == '\r'))
+                ++lineEnd;
+#else
             while (*lineEnd == '\n' || *lineEnd == '\r') {
                 ++lineEnd;
             }
+#endif
         }
         cursor = lineEnd;
     }
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+    /* 2.x: stdout is flushed when verbose */
+    if (output == stdout && optsCmdLine.verbose > 1)
+        fflush(output);
+#endif
     return (unsigned int)cursor;
 }
 
@@ -691,6 +747,71 @@ void emit_formatted_diagnostic(Plugin *source, DiagnosticSourcePosition *diagnos
     }
 }
 
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+/* 2.x: gcc's lower-case level names (none for an error), and a #warning's or #error's source line after its first
+ * line */
+static char *gcc_level_names[] = {"", " note", " warning", "", " alert", " status"};
+
+void format_and_print_message(Plugin *type, DiagnosticSourcePosition *obj, int messageCode, SInt16 kind,
+                              char *formatFlags, char **formatOptions)
+{
+    char formattedBuffer[256];
+    char messageBuffer[256];
+    char sourceBuffer[256];
+    char *formatted;
+    char *message;
+    char *source;
+    char *line;
+    char *end;
+
+    if (obj != NULL) {
+        if (gcc_level_names[kind][0] != 0) {
+            message = mprintf(messageBuffer, sizeof(messageBuffer),
+                              "%s:%d:%s: ", OS_SpecToStringRelative(&obj->file, NULL, data_005880e0, 0x104), obj->line,
+                              gcc_level_names[kind]);
+        } else {
+            message = mprintf(messageBuffer, sizeof(messageBuffer),
+                              "%s:%d: ", OS_SpecToStringRelative(&obj->file, NULL, data_005880e0, 0x104), obj->line);
+        }
+    } else {
+        if (kind != 5) {
+            message = mprintf(messageBuffer, sizeof(messageBuffer), "%s: ", clState.programName);
+        } else {
+            messageBuffer[0] = 0;
+            message = messageBuffer;
+        }
+    }
+
+    formatted = format_prefixed_text(formattedBuffer, sizeof(formattedBuffer), message, formatFlags, formatOptions);
+    /* (the original reads the source line without checking obj or the line for NULL) */
+    if ((strstr(formatted, "#warning") != NULL || strstr(formatted, "#error") != NULL) && obj != NULL &&
+        obj->sourceLine != NULL && obj->sourceLine[0] != 0)
+        source = forward_format_arguments(sourceBuffer, sizeof(sourceBuffer), message, "%", obj->sourceLine);
+    else
+        source = NULL;
+    if (message != messageBuffer)
+        free(message);
+
+    line = formatted;
+    while (*line != 0) {
+        end = line;
+        while (*end != 0 && *end != '\n')
+            end++;
+        emit_formatted_message(kind, "%.*s\n", end - line, line);
+        if (source != NULL) {
+            emit_formatted_message(kind, "%s\n", source);
+            if (source != sourceBuffer)
+                free(source);
+            source = NULL;
+        }
+        if (*end != 0)
+            end++;
+        line = end;
+    }
+    if (formatted != formattedBuffer)
+        free(formatted);
+}
+#else
 void format_and_print_message(Plugin *type, DiagnosticSourcePosition *obj, int messageCode, SInt16 kind,
                               char *formatFlags, char **formatOptions)
 {
@@ -736,6 +857,7 @@ void format_and_print_message(Plugin *type, DiagnosticSourcePosition *obj, int m
     if (formatted != formattedBuffer)
         free(formatted);
 }
+#endif
 
 void print_diagnostic_with_details(Plugin *unused, struct DiagnosticDetails *details, int unused2, short diagnostic,
                                    char *formatArg, char **formatArgs)
@@ -954,7 +1076,9 @@ short CLIO_ReportDiagnostic(Plugin *type, DiagnosticSourcePosition *record, int 
     return severity;
 }
 
-#if VERSION >= VERSION_GC_1_3
+#if VERSION >= VERSION_GC_2_7
+/* (StringExtras.c's) */
+#elif VERSION >= VERSION_GC_1_3
 int __stdcall CLIO_CompareStringsIgnoreCase(char *left, char *right)
 {
     unsigned int rightValue;
@@ -989,6 +1113,7 @@ static void CLIO_StrippedLiterals(char *buffer, char *text)
     sprintf(buffer, "%s%s", " ... ", text);
 }
 
+#if VERSION < VERSION_GC_2_7
 NameTableEntry *create_data_block(char *name, const void *source, unsigned int size)
 {
     NameTableEntry *block;
@@ -1019,3 +1144,4 @@ NameTableEntry *create_data_block(char *name, const void *source, unsigned int s
     block->next = NULL;
     return block;
 }
+#endif

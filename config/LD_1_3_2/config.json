@@ -1,0 +1,17 @@
+{
+  "original": "build/compilers/GC/1.3.2/mwldeppc.exe",
+  "output": "mwldeppc.exe",
+  "compiler_version": "GC_2_7",
+  "units_from": "LD_2_6",
+  "resources": "src/linker/mwldeppc13.rc",
+  "assembly": {
+    "common": "src/linker/common.s",
+    "cexc.obj": "src/runtime/cexc.s",
+    "ccinit.obj": "src/runtime/ccinit.s"
+  },
+  "imports": [
+    "src/runtime/imports/kernel32.s",
+    "src/runtime/imports/version.s",
+    "src/runtime/imports/lmgr326b.s"
+  ]
+}

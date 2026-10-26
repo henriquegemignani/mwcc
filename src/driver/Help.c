@@ -194,7 +194,12 @@ void append_columns_newline(void)
 
 unsigned int Help_FormatOption(OptionList *scope, Option *pragma, unsigned int formatMode, char *nameFilter)
 {
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+    /* (the 2.x linker's is not initialized: in .bss) */
+    static struct FlagTextBuffer data_0054dd04;
+#else
     static struct FlagTextBuffer data_0054dd04 = {""};
+#endif
     char formatFlags;
     const char normalFormat = 1;
     const char alternateFormat = 2;

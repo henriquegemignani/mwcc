@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""python tools/verify.py: build every version and check it, leaving the build configured for the primary one. A version that
+"""python tools/verify.py: build every version (and linker) and check it, leaving the build configured for the primary one. A version that
 links the executable (config/VERSION/splits.txt) must also have every function of a source match in objdiff's report,
 linked or not, or for a version that lists its Matching sources (config.json "matching"), of those; another compares
 each function with the original's."""
@@ -10,10 +10,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from configure import PRIMARY, VERSIONS
+from configure import LINKERS, PRIMARY, VERSIONS
 
 ok = True
-for version in [*(v for v in VERSIONS if v != PRIMARY), PRIMARY]:
+for version in [*(v for v in VERSIONS + LINKERS if v != PRIMARY), PRIMARY]:
     subprocess.run([sys.executable, "configure.py", "--version", version], check=True)
     result = subprocess.run(["ninja"], capture_output=True, text=True)
     if result.returncode == 0 and Path(f"config/{version}/splits.txt").exists():

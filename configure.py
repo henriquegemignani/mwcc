@@ -9,6 +9,7 @@ compiled object with its split one. Any other version compares each compiled fun
 import argparse
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,9 @@ from split import read_splits
 
 # (in release order: the index is VERSION in include/version.h)
 VERSIONS = ["GC_1_0", "GC_1_1", "GC_1_1p1", "GC_1_2_5", "GC_1_2_5n", "GC_1_3", "GC_1_3_2", "GC_2_7"]
+# (the linkers, mwldeppc.exe: each is the driver and C library of a compiler version, config.json "compiler_version",
+# with the linker plugin in place of the compiler's)
+LINKERS = ["LD_1_0", "LD_1_3_2", "LD_2_6", "LD_2_7"]
 # (the version the build is configured for unless one is named)
 PRIMARY = "GC_1_2_5"
 # (units the runtime library ships as objects)
@@ -31,6 +35,11 @@ ENVIRONMENT = "cmd /c set MWCIncludes=include/libc&& " if WINDOWS else "MWCInclu
 # (the Pro 5 tools check a FlexLM license: tools/lmgr_stub stands in for the library, beside each of them)
 STUB = " build/compilers/{}/lmgr326b.dll" if WINDOWS else ""
 STUB_INPUT = " | tools/lmgr_stub/lmgr326b.dll" if WINDOWS else ""
+# (LLVM's resource compiler and clang's assembler, for the resources and the objects a configuration has as source,
+# config.json "resources" and "assembly")
+LLVM_RC = shutil.which("llvm-rc") or ("C:/Program Files/LLVM/bin/llvm-rc.exe" if WINDOWS else "llvm-rc")
+CLANG = shutil.which("clang") or ("C:/Program Files/LLVM/bin/clang.exe" if WINDOWS else "clang")
+quote = lambda path: chr(34) + path + chr(34) if WINDOWS else shlex.quote(path)
 
 
 def quote(argument):
@@ -91,10 +100,52 @@ def objdiff(version, config, sources, units):
     }, indent=2) + "\n")
 
 
+def source_only(version, config, sources, splits):
+    """The build of a linker from source alone: its units are another linker's (config.json "units_from"), compiled,
+    the ones with no C source assembled (config.json "assembly": {unit: source}) and the ones that are the import
+    library's stubs left out; its imports are assembled too (config.json "imports": sources), and its resources
+    compiled (config.json "resources")."""
+    assembly = config.get("assembly", {})
+    imports = config.get("imports", [])
+    compiled = lambda source: f"build/{version}/compiled/{Path(source).with_suffix('.obj').as_posix()}"
+    inputs = [f"build/{version}/compiled/resources.res"] if config.get("resources") else []
+    replace = config.get("replace", {})
+    for unit, _ in read_splits(splits)[1]:
+        unit = replace.get(unit, unit)
+        if unit in assembly:
+            inputs.append(compiled(assembly[unit]))
+        elif unit in sources:
+            inputs.append(f"build/{version}/compiled/{unit}.obj")
+    inputs += [compiled(source) for source in imports]
+    output = config.get("output", "mwldeppc.exe")
+    out = [
+        "rule assemble",
+        f"  command = {quote(CLANG)} --target=i386-pc-windows-msvc -c $in -o $out",
+        "  description = AS $out",
+        *(f"build {compiled(source)}: assemble {source}" for source in [*assembly.values(), *imports]),
+        "rule link_equivalent",
+        "  command = $python tools/link.py --equivalent $version $out $in",
+        "  description = LINK $out",
+        f"build build/{version}/equivalent/{output}: link_equivalent {' '.join(inputs)} | "
+        f"{TOOL_DEP}build/compilers/pro53/mwld.exe tools/link.py || lib/ok",
+        f"build equivalent: phony build/{version}/equivalent/{output}",
+        "build build/compilers/pro53/mwld.exe: download",
+        "  tool = mwld",
+    ]
+    if config.get("resources"):
+        out += [
+            "rule rc",
+            f"  command = {quote(LLVM_RC)} -C 1252 -no-preprocess -fo $out $in",
+            "  description = RC $out",
+            f"build build/{version}/compiled/resources.res: rc {config['resources']}",
+        ]
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", choices=VERSIONS, default=PRIMARY)
-    parser.add_argument("--mode", choices=["link", "compare"],
+    parser.add_argument("--version", choices=VERSIONS + LINKERS, default=PRIMARY)
+    parser.add_argument("--mode", choices=["link", "compare", "source"],
                         help="relink the executable from its split units, or compare each compiled function with the "
                         "original's (the default: config/<version>/config.json \"mode\", else link when there are splits)")
     parser.add_argument("--split-only", action="store_true",
@@ -103,10 +154,32 @@ def main():
     arguments = parser.parse_args()
     version = arguments.version
     config = json.loads(Path(f"config/{version}/config.json").read_text())
+    # (a linker builds its shared sources as its compiler version does: that version's compilers, flags and symbol
+    # settings, unless the linker's config gives its own)
+    release = config.get("compiler_version", version)
+    if release != version:
+        base = json.loads(Path(f"config/{release}/config.json").read_text())
+        config = {**{k: base[k] for k in ("compilers", "flags", "compiler_overrides", "sym_on", "sym_off") if k in base},
+                  **config}
+    output = config.get("output", "mwcceppc.exe")
     sources = json.loads(Path("config/sources.json").read_text())
-    splits = Path(f"config/{version}/splits.txt")
-    mode = arguments.mode or config.get("mode") or ("link" if splits.exists() else "compare")
+    # (a linker built from source alone, config.json "units_from": another linker's units, compiled for this one, with
+    # no split of its own and no exact build; its executable is checked by its behaviour, tools/linker_equivalence.py)
+    units_from = config.get("units_from")
+    splits = Path(f"config/{units_from or version}/splits.txt")
+    if release != version:
+        # (only the sources that are units of the linker)
+        units_here = {unit for unit, _ in read_splits(splits)[1]}
+        # (a unit built from another source in this linker, config.json "replace": {unit: source})
+        units_here |= set(config.get("replace", {}).values())
+        units_here -= set(config.get("replace", {}))
+        sources = {name: settings for name, settings in sources.items() if name in units_here}
+    else:
+        # (the linker's own files are no compiler's)
+        sources = {name: settings for name, settings in sources.items() if not name.startswith("src/linker/")}
+    mode = "source" if units_from else arguments.mode or config.get("mode") or ("link" if splits.exists() else "compare")
     linking = mode == "link"
+    equivalent = []
     if linking and not splits.exists():
         parser.error(f"{splits} does not exist: --mode link needs the version's split")
     python = quote(sys.executable)
@@ -140,7 +213,7 @@ def main():
         "  tool = objdiff-cli",
         *([] if WINDOWS else ["build build/tools/wibo: download", "  tool = wibo"]),
         "build build/compilers/ok "
-        + " ".join(json.loads(Path(f"config/{v}/config.json").read_text())["original"] for v in VERSIONS)
+        + " ".join(json.loads(Path(f"config/{v}/config.json").read_text())["original"] for v in VERSIONS + LINKERS)
         + ": download",
         "  tool = compilers",
     ]
@@ -166,7 +239,9 @@ def main():
         for listed, value in (("sym_on", "on"), ("sym_off", "off")):
             if source in config.get(listed, []) and "-sym" in flags:
                 flags[flags.index("-sym") + 1] = value
-        args = ["-c", *flags, f"-DVERSION={VERSIONS.index(version)}",
+        # (-DLINKER=NN for the linker of GC N.N, so that the sources can tell the linkers apart)
+        args = ["-c", *flags, f"-DVERSION={VERSIONS.index(release)}",
+                *([f"-DLINKER={version[3]}{version[5]}"] if release != version else []),
                 *(f"-I{d}" for d in settings.get("include_dirs", [])), "-Iinclude", "-i-",
                 *(f"-I{d}" for d in settings.get("system_include_dirs", [])), "-Iinclude/libc"]
         if host(settings, source) == "pro4":
@@ -177,7 +252,9 @@ def main():
                     f"  stem = {Path(source).stem}"]
         out.append(f"  compiler_command = {compiler.replace('/', chr(92)) if WINDOWS else compiler}")
         objects.append(obj)
-    if linking:
+    if units_from:
+        out += source_only(version, config, sources, splits)
+    elif linking:
         units = [unit for unit, _ in read_splits(splits)[1]]
         split_objects = [f"build/{version}/obj/{unit}.obj" for unit in units]
         # (the executable's resources are a .res file of their own, after the sections object that orders the image)
@@ -196,6 +273,29 @@ def main():
         imports = [f"build/{Path(library).stem}.lib" if library.endswith(".def") else library
                    for library in config.get("imports", ["lib/win32sdk/KERNEL32.LIB"])]
         inputs += imports + ["build/lmgr326b.lib"]
+        # (the units listed as "equivalent" do what the original's do without being its bytes: linked from source with
+        # the Matching ones, they give a second executable, which tools/linker_equivalence.py checks by its behaviour)
+        equivalent = [unit for unit in config.get("equivalent", []) if unit in sources]
+        # (an "equivalent" unit with no source, an import's stubs, is left out: the linker makes the stubs from the
+        # import libraries, as it does the KERNEL32 ones)
+        dropped = [f"build/{version}/obj/{unit}.obj" for unit in config.get("equivalent", []) if unit not in sources]
+        equivalent_inputs = [f"build/{version}/compiled/{path[len(f'build/{version}/obj/'):]}"
+                             if path.startswith(f"build/{version}/obj/") and path[len(f"build/{version}/obj/"):-4]
+                             in equivalent else path for path in inputs if path not in dropped]
+        # (resources written as source: compiled for the equivalent executable in place of the original's)
+        resource_source = config.get("resources")
+        if resource_source:
+            equivalent_inputs = [f"build/{version}/compiled/resources.res" if path.endswith("/resources.res") else path
+                                 for path in equivalent_inputs]
+        # (objects written as assembly, config.json "assembly": {link input: source}, such as the COMMON block
+        # (tools/common_source.py writes it) and the runtime library's table bounds, in place of the split's or the
+        # library's; and without the object that orders the sections as the original's, "order_sections": false, the
+        # equivalent link is all source)
+        assembled = {path: f"build/{version}/compiled/{Path(source).with_suffix('.obj')}"
+                     for path, source in config.get("assembly", {}).items()}
+        equivalent_inputs = [assembled.get(path, path) for path in equivalent_inputs]
+        if config.get("order_sections") is False:
+            equivalent_inputs = [path for path in equivalent_inputs if path != f"build/{version}/obj/sections.obj"]
         out += [
             "rule split",
             "  command = $python tools/split.py $version",
@@ -218,11 +318,35 @@ def main():
             "build build/lmgr326b.lib: implib config/lmgr326b.def | tools/implib.py",
             *(f"build build/{Path(library).stem}.lib: implib {library} | tools/implib.py"
               for library in config.get("imports", []) if library.endswith(".def")),
-            f"build build/{version}/mwcceppc.exe | build/{version}/ok: link {' '.join(inputs)} | "
+            f"build build/{version}/{output} | build/{version}/ok: link {' '.join(inputs)} | "
             f"{TOOL_DEP}build/compilers/pro53/mwld.exe tools/link.py || lib/ok",
             f"build build/{version}/report.json: report | build/{version}/ok build/tools/objdiff-cli "
             f"{' '.join(objects)}",
         ]
+        if equivalent and resource_source:
+            out += [
+                "rule rc",
+                f"  command = {quote(LLVM_RC)} -C 1252 "
+                "-no-preprocess -fo $out $in",
+                "  description = RC $out",
+                f"build build/{version}/compiled/resources.res: rc {resource_source}",
+            ]
+        if equivalent and assembled:
+            out += [
+                "rule assemble",
+                f"  command = {quote(CLANG)} --target=i386-pc-windows-msvc -c $in -o $out",
+                "  description = AS $out",
+                *(f"build {assembled[path]}: assemble {source}" for path, source in config["assembly"].items()),
+            ]
+        if equivalent:
+            out += [
+                "rule link_equivalent",
+                "  command = $python tools/link.py --equivalent $version $out $in",
+                "  description = LINK $out",
+                f"build build/{version}/equivalent/{output}: link_equivalent {' '.join(equivalent_inputs)} | "
+                f"{TOOL_DEP}build/compilers/pro53/mwld.exe tools/link.py || lib/ok",
+                f"build equivalent: phony build/{version}/equivalent/{output}",
+            ]
         objdiff(version, config, sources, units)
     else:
         configs = (f"config/{version}/config.json config/{version}/functions.json config/{version}/bindings.json "
@@ -246,7 +370,8 @@ def main():
         f"build progress: phony build/{version}/report.json",
         f"build build.ninja: configure | configure.py config/sources.json config/{version}/config.json"
         + (f" {splits}" if linking else ""),
-        f"default build/{version}/ok all_source",
+        f"default build/{version}/ok all_source" + (" equivalent" if linking and equivalent else "")
+        if not units_from else "default equivalent",
         "",
     ]
     Path("build.ninja").write_text("\n".join(out))

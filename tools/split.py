@@ -127,9 +127,10 @@ TWO_BYTE.update({opcode: (0, 0) for opcode in range(0xC8, 0xD0)})
 PREFIXES = {0x26, 0x2E, 0x36, 0x3E, 0x64, 0x65, 0x66, 0x67, 0xF0, 0xF2, 0xF3}
 
 
-def branches(code, base):
-    """(offset of the displacement, target) of each call, jmp and jcc with a 32-bit displacement in CODE at BASE."""
-    out, offset = [], 0
+def instructions(code, base):
+    """(offset, length, opcode, target) of each instruction in CODE at BASE, the target that of a call, jmp or jcc
+    with a 32-bit displacement (else None); opcode is 0x0Fxx for a two-byte one."""
+    offset = 0
     while offset < len(code):
         start, operand16, address16 = offset, False, False
         while code[offset] in PREFIXES:
@@ -164,10 +165,15 @@ def branches(code, base):
             offset += 2 if address16 else 4
         else:
             offset += 6 if immediate == "p" else immediate
+        target = None
         if relative:
-            displacement = int.from_bytes(code[field:field + 4], "little", signed=True)
-            out.append((field - start + start, base + offset + displacement))
-    return out
+            target = base + offset + int.from_bytes(code[field:field + 4], "little", signed=True)
+        yield start, offset - start, opcode, target, field
+
+
+def branches(code, base):
+    """(offset of the displacement, target) of each call, jmp and jcc with a 32-bit displacement in CODE at BASE."""
+    return [(field, target) for _, _, _, target, field in instructions(code, base) if target is not None]
 
 
 class Coff:

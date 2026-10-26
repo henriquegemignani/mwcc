@@ -78,7 +78,11 @@ def revert_conflicts(version, inputs, text):
 
 
 def main():
-    version, output, *inputs = sys.argv[1:]
+    # (--equivalent: the link has units that are equivalent to the original's but not its bytes, so it is not checked
+    # against the original's SHA-1; tools/linker_equivalence.py checks what it does)
+    arguments = sys.argv[1:]
+    equivalent = arguments[0] == "--equivalent"
+    version, output, *inputs = arguments[1:] if equivalent else arguments
     config = json.loads(Path(f"config/{version}/config.json").read_text())
     if config.get("validate_units"):
         replaced = [path for path in inputs if path.startswith(f"build/{version}/compiled/") and not usable(version, path)]
@@ -107,6 +111,10 @@ def main():
     stamp = struct.unpack_from("<I", original.data, 0x3C)[0] + 8
     linked[stamp:stamp + 4] = original.data[stamp:stamp + 4]
     Path(output).write_bytes(linked)
+    if equivalent:
+        built = sum(path.startswith(f"build/{version}/compiled/") for path in inputs)
+        print(f"{output}: {built} units linked from source, not checked against the original's SHA-1", file=sys.stderr)
+        return
     if hashlib.sha1(linked).hexdigest() == config["sha1"]:
         units = len(read_splits(f"config/{version}/splits.txt")[1])
         built = sum(path.startswith(f"build/{version}/compiled/") for path in inputs)

@@ -11,6 +11,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#if VERSION < VERSION_GC_2_7
+/* (2.x: StringExtras.c's) */
 int GLUECALL fn_004050e0(char *left, char *right, int count)
 {
     unsigned int rightValue;
@@ -27,8 +29,10 @@ int GLUECALL fn_004050e0(char *left, char *right, int count)
     }
     return 0;
 }
+#endif
 
-#if VERSION >= VERSION_GC_1_3
+/* (2.x has it in MsDos.c) */
+#if VERSION >= VERSION_GC_1_3 && VERSION < VERSION_GC_2_7
 #include "driver/CLIO.h"
 int __stdcall fn_00412660(const char *left, const char *right)
 {

@@ -54,6 +54,64 @@ unsigned int return_unsigned_zero(void)
     return 0U;
 }
 
+#if VERSION >= VERSION_GC_2_7
+/* (2.x: the value read as mweppc's DescHelpParam_Number reads it) */
+void format_num_parm(NUM_T *parm, char **name, char **help, char **value)
+{
+    unsigned long v;
+    unsigned char c;
+    unsigned short w;
+
+    v = 0;
+    *name = NULL;
+    if (parm->myname)
+        *name = parm->myname;
+    if (parm->size == 1) {
+        if (!*name)
+            *name = "byte";
+        if (parm->num)
+            ((unsigned char *)&c)[0] = ((unsigned char *)parm->num)[0];
+        v = c;
+    } else if (parm->size == 2) {
+        if (!*name)
+            *name = "short";
+        if (parm->num) {
+            ((unsigned char *)&w)[0] = ((unsigned char *)parm->num)[0];
+            ((unsigned char *)&w)[1] = ((unsigned char *)parm->num)[1];
+        }
+        v = w;
+    } else if (parm->size == 4) {
+        if (!*name)
+            *name = "long";
+        if (parm->num) {
+            ((unsigned char *)&v)[0] = ((unsigned char *)parm->num)[0];
+            ((unsigned char *)&v)[1] = ((unsigned char *)parm->num)[1];
+            ((unsigned char *)&v)[2] = ((unsigned char *)parm->num)[2];
+            ((unsigned char *)&v)[3] = ((unsigned char *)parm->num)[3];
+        }
+    }
+    if (parm->size == 4) {
+        if (parm->lo != parm->hi)
+            sprintf(parm_help_buffer, "range 0x%x - 0x%x", parm->lo, parm->hi);
+        *help = parm_help_buffer;
+        if (v <= 0x10000)
+            sprintf(parm_format_buffer, "%u", v);
+        else
+            sprintf(parm_format_buffer, "0x%x", v);
+        *value = parm_format_buffer;
+    } else {
+        if (parm->lo != parm->hi)
+            sprintf(parm_help_buffer, "range %u - %u", parm->lo, parm->hi);
+        *help = parm_help_buffer;
+        sprintf(parm_format_buffer, "%u", v);
+        *value = parm_format_buffer;
+    }
+    if (!parm->num)
+        *value = NULL;
+    if (parm->lo == parm->hi)
+        *help = NULL;
+}
+#else
 void format_num_parm(NUM_T *parm, char **name, char **help, char **value)
 {
     unsigned long v;
@@ -103,6 +161,7 @@ void format_num_parm(NUM_T *parm, char **name, char **help, char **value)
     if (parm->lo == parm->hi)
         *help = NULL;
 }
+#endif
 
 unsigned int fn_0042910d(void)
 {

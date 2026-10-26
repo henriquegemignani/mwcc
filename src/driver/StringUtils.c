@@ -20,6 +20,18 @@ UInt8 *_pstrcpy(UInt8 *destination, UInt8 *string)
     return destination;
 }
 
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+/* A Pascal string, at most MAXIMUM characters (the length byte as it is). */
+void fn_00412140(UInt8 *destination, const UInt8 *source, int maximum)
+{
+    short count = source[0] > maximum ? maximum : source[0];
+
+    for (; count >= 0; count--) {
+        *destination++ = *source++;
+    }
+}
+#endif
+
 unsigned int pstrcmp(UInt8 *left, char *right)
 {
     int length;

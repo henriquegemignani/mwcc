@@ -37,7 +37,7 @@ PLinker pLinker = {5, 0, 0,       0,      0, 0, 0,        0,         0,         
 
 PDisassembler pDisassembler = {3, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1};
 
-PProject pProject = {7, {0}, 0x400, 0x40, 1, 0, 8, 8, 1};
+PProject pProject = {7, 0, {0}, 0x400, 0x40, 1, 0, 8, 8, 1};
 
 PCLTExtras pCLTExtras = {1};
 

@@ -962,8 +962,12 @@ char *unmangle_type(int *context, MOutBuf *output, char *type)
         case 'r':
             name = "long double";
             break;
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+            /* 2.x: no vector types (an X is not a type) */
+#else
         case 'X':
             return unmangle_vector_type(context, output, type, qualifiers);
+#endif
         case 'P':
             unmangle_indirect_type(context, output, type, qualifiers, '*');
             return;
@@ -1061,10 +1065,29 @@ void unmangle_function_parameters(int *context, MOutBuf *output, char *encoding)
                 }
                 break;
             }
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+            /* 2.x: a _ ends the parameters, the return type after it skipped (the last thing in the name) */
+            if (*encoding == '_') {
+                encoding = unmangle_type(context, NULL, encoding + 1);
+                if (*encoding != '\0') {
+                    longjmp(context, 1);
+                }
+                break;
+            }
             encoding = unmangle_type(context, output, encoding);
             if (*encoding == '\0') {
                 break;
             }
+            /* and no comma before it */
+            if (*encoding == '_') {
+                continue;
+            }
+#else
+            encoding = unmangle_type(context, output, encoding);
+            if (*encoding == '\0') {
+                break;
+            }
+#endif
             if (output != NULL && output->left != 0) {
                 *output->ptr++ = ',';
                 output->left--;
@@ -1161,6 +1184,10 @@ void Unmangle_UnmangleSymbolName(char *name, char *output, int outputSize)
                 ++name;
             break;
         case '_':
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+            if (data_005649b8 == '_')
+                ++name;
+#endif
             switch (name[1]) {
                 case '#':
                 case '%':

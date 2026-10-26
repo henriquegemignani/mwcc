@@ -4,10 +4,10 @@ and symbols.txt (decomp-toolkit's formats, read by tools/split.py) for a version
 
 The unit boundaries cannot be read from the executable; they are inferred:
 
-- text: each function in config/VERSION/functions.json carries the source it was attributed to. The units are put in the
-  reference version's order (a unit the reference has not goes by the median address of its functions), and functions are
-  assigned to units in that order, each to the unit of its source or, failing that, the one that keeps the sequence
-  monotone and has the fewest changes;
+- text: each function in config/VERSION/functions.json carries the source it was attributed to (or a "unit" that
+  overrides it). The units are put in the reference version's order (a unit the reference has not goes by the median
+  address of its functions), and functions are assigned to units in that order, each to the unit of its source or,
+  failing that, the one that keeps the sequence monotone and has the fewest changes;
 - data: a unit's data is laid out in the link order of its text, so the objects the code references are assigned to
   units by the same monotone assignment (the owner of an object is the unit referencing it most consistently) and each
   unit's range runs up to the next unit's first object;
@@ -36,7 +36,14 @@ EPSILON = 0.01  # (the cost of changing units between two functions with no info
 
 
 def folder(version):
-    return version if version.startswith("GC_") else "GC_" + version.replace(".", "_")
+    return version if version.startswith(("GC_", "LD_")) else "GC_" + version.replace(".", "_")
+
+
+def compiled_folder(version):
+    """The build folder of the objects compiled for VERSION: a linker's shared sources are the compiler's of its release
+    (config.json "compiler_version")."""
+    config = json.loads(Path(f"config/{folder(version)}/config.json").read_text())
+    return config.get("compiler_version", folder(version))
 
 
 def monotone_assignment(items, unit_count, cost, free_last=None):
@@ -163,7 +170,14 @@ def text_units(image, reference_units):
     labels, run = [], None
     for f in image.functions:
         dll = thunk_dll(f)
-        if f["name"] in defined:
+        # (a function's "unit" names its unit outright, for code the compiler's objects have elsewhere; a linker's own
+        # unit, src/linker/, is not among the compiler's objects: its functions are where the list puts them, though
+        # the compiler's objects define some of their names in their own units)
+        if f.get("unit"):
+            label = f["unit"]
+        elif f.get("source", "").startswith("src/linker/"):
+            label = f["source"]
+        elif f["name"] in defined:
             label = defined[f["name"]]
         elif f.get("source"):
             label = f["source"]
@@ -225,6 +239,23 @@ def collect_references(image, owner_of_function):
     return refs, everywhere
 
 
+def data_pointers(image, refs, section, target_section=None):
+    """[(where, target)] of the pointers in a section to objects of it (or of TARGET_SECTION) that no code
+    references."""
+    low, high = image.sections[section].virtual_address, image.end_of(section)
+    target = target_section or section
+    target_low, target_high = image.sections[target].virtual_address, image.end_of(target)
+    found = []
+    for at in image.fixups[bisect_left(image.fixups, low):bisect_left(image.fixups, high)]:
+        try:
+            value = struct.unpack_from("<I", image.pe.data, image.pe.address_to_offset(at))[0]
+        except ValueError:
+            continue
+        if target_low <= value < target_high and value not in refs:
+            found.append((at, value))
+    return found
+
+
 def data_owners(image, refs, unit_count, section, common_unit):
     """[(address, owner)] for the referenced objects in a section; COMMON_UNIT is the unit index of the tail block."""
     low, high = image.sections[section].virtual_address, image.end_of(section)
@@ -237,6 +268,37 @@ def data_owners(image, refs, unit_count, section, common_unit):
 
     owners = monotone_assignment(addresses, unit_count, cost)
     return list(zip(addresses, owners))
+
+
+def exception_ranges(image, order, ranges, owner_of_function):
+    """Lay the units' .rdata and .exc$BBB ranges out again in the units' order here. The runtime sections are the
+    reference's, moved by the difference of their addresses, which is right only when their units are in the
+    reference's order: a unit that moved (the runtime's operator new before _chkstk in the 1.0 linker) takes its
+    exception tables (.exc$BBB, 8 bytes per function: its address and its action table in .rdata) and its .rdata with
+    it. The ranges keep their sizes. Kept only when every .exc$BBB entry is then in the unit that has its function."""
+    starts = sorted(owner_of_function)
+    index = {unit: i for i, unit in enumerate(order)}
+    moved = {}
+    for section, wanted in ((".rdata", None), (".exc", ".exc$BBB")):
+        pieces = [(index[unit], k, unit, r) for unit in order for k, r in enumerate(ranges[unit])
+                  if r[0] == section and r[3].get("rename") == wanted]
+        if not pieces:
+            continue
+        at = min(r[1] for *_, r in pieces)
+        laid = []
+        for *_, unit, r in sorted(pieces, key=lambda p: (p[0], p[1])):
+            laid.append((unit, r, (section, at, at + r[2] - r[1], r[3])))
+            at += r[2] - r[1]
+        moved[section] = laid
+    for unit, _, (section, start, end, _) in moved.get(".exc", []):
+        for at in range(start, end, 8):
+            function = struct.unpack_from("<I", image.pe.read(at, 4))[0]
+            k = bisect_right(starts, function) - 1
+            if k < 0 or order[owner_of_function[starts[k]]] != unit:
+                return
+    for laid in moved.values():
+        for unit, old, new in laid:
+            ranges[unit][ranges[unit].index(old)] = new
 
 
 def derive(version, reference, exe, out):
@@ -255,6 +317,11 @@ def derive(version, reference, exe, out):
         previous = next((p for p in reversed(ref_names[:i]) if p in order), None)
         position = order.index(previous) + 1 if previous else 0
         order.insert(position, unit)
+    if folder(version).startswith("LD_") and "common" in order:
+        # (a linker's COMMON block follows the statics of all its units: its own units come after the compiler's
+        # last one the reference has)
+        order.remove("common")
+        order.append("common")
     index = {unit: i for i, unit in enumerate(order)}
     old_to_new = {i: index[unit] for i, unit in enumerate(names)}
     owner_of_function = {a: old_to_new[o] for a, o in owner_of_function.items()}
@@ -299,11 +366,39 @@ def derive(version, reference, exe, out):
                 delta = image.sections[section].virtual_address - ref_base[section]
                 ranges[unit].append((section, start + delta, end + delta, dict(options)))
 
+    exception_ranges(image, order, ranges, owner_of_function)
+
     # .data and .bss, from the references
     boundaries = {}
+    data_owned = {}
     for section in DATA_SECTIONS:
         owned = data_owners(image, refs, unit_count, section, common_unit if section == ".bss" else -1)
         low, high = image.sections[section].virtual_address, image.end_of(section)
+        # (an object only another object points to, at the end of a unit's objects, is the unit's that has the pointer
+        # when the pointer is in the next unit: MSL's locale strings, which its tables point to, after DWARF_line.c)
+        pointers = data_pointers(image, refs, section)
+        if section == ".bss" and ".data" in data_owned:
+            # (a static only .data points to is the unit's whose .data has the pointer: ELF_gen.c's buffer)
+            addresses = [a for a, _ in data_owned[".data"]]
+            extra = {}
+            for at, value in data_pointers(image, refs, ".data", ".bss"):
+                k = bisect_right(addresses, at) - 1
+                if k >= 0:
+                    extra.setdefault(value, set()).add(data_owned[".data"][k][1])
+            if extra:
+                refs = {**refs, **extra}
+                owned = data_owners(image, refs, unit_count, section, common_unit)
+        if pointers:
+            addresses = [a for a, _ in owned]
+            extra = {}
+            for at, value in pointers:
+                k, j = bisect_right(addresses, at) - 1, bisect_right(addresses, value)
+                if k >= 0 and j < len(addresses) and owned[k][1] == owned[j][1] and j > 0 and owned[j - 1][1] != owned[j][1]:
+                    extra.setdefault(value, set()).add(owned[j][1])
+            if extra:
+                refs = {**refs, **extra}
+                owned = data_owners(image, refs, unit_count, section, common_unit if section == ".bss" else -1)
+        data_owned[section] = owned
         by_unit = {}
         for address, owner in owned:
             by_unit.setdefault(owner, []).append(address)
@@ -343,7 +438,7 @@ def compiled_definitions(version):
     source that has it, whatever the function list attributed it to (the list's sources come from another version's
     layout). A name two sources define is left out."""
     from glob import glob
-    root = f"build/{folder(version)}/compiled/"
+    root = f"build/{compiled_folder(version)}/compiled/"
     found, clash = {}, set()
     for path in glob(root + "**/*.obj", recursive=True):
         source = path.replace("\\", "/").removeprefix(root).removesuffix(".obj")
@@ -372,15 +467,19 @@ def compiled_definitions(version):
             plain = name if name.startswith("?") else re.sub(r"@\d+$", "", name).removeprefix("_")
             if found.setdefault(plain, source) != source:
                 clash.add(plain)
-    return {k: v for k, v in found.items() if k not in clash}
+    # (a name made from an address names another function in another executable: the compiler's objects for a linker)
+    foreign = compiled_folder(version) != folder(version)
+    return {k: v for k, v in found.items() if k not in clash and not (foreign and re.fullmatch(r"fn_[0-9a-f]{8}", k))}
 
 
 def compiled_names(version):
     """{undecorated name: decorated name} of the symbols the version's compiled objects define or reference (names that
-    decorate two ways are left out)."""
+    decorate two ways are left out). A linker's are the compiler's objects and its own (the linker's sources)."""
     from glob import glob
     names, clash = {}, set()
-    for path in glob(f"build/{folder(version)}/compiled/**/*.obj", recursive=True):
+    folders = dict.fromkeys([compiled_folder(version), folder(version)])
+    paths = [p for f in folders for p in glob(f"build/{f}/compiled/**/*.obj", recursive=True)]
+    for path in paths:
         data = Path(path).read_bytes()
         symptr, count = struct.unpack_from("<II", data, 8)
         strings = symptr + count * 18
@@ -388,13 +487,15 @@ def compiled_names(version):
         while i < count:
             raw = data[symptr + 18 * i:symptr + 18 * i + 8]
             aux = data[symptr + 18 * i + 17]
+            # (a static's name decorates nothing: ParserFace.c's own cdecl xmalloc is not the driver's)
+            external = data[symptr + 18 * i + 16] == 2
             if raw[:4] == b"\0\0\0\0":
                 offset = struct.unpack_from("<I", raw, 4)[0]
                 name = data[strings + offset:data.index(b"\0", strings + offset)].decode("latin-1")
             else:
                 name = raw.rstrip(b"\0").decode("latin-1")
             i += 1 + aux
-            if name.startswith((".", "@", "$")) or name.startswith("?") or name == "":
+            if name.startswith((".", "@", "$")) or name.startswith("?") or name == "" or not external:
                 continue
             plain = re.sub(r"@\d+$", "", name).removeprefix("_")
             if names.setdefault(plain, name) != name:
@@ -538,8 +639,13 @@ def make_symbols(image, order, ranges, owner_of_function, refs, ref_symbols):
         lines.append((".text", address, f"{name} = .text:0x{address:08X}; // type:function size:0x{size:X} "
                       f"scope:{scope}"))
 
-    # data objects: every bound or referenced address inside a unit's range of a data section
+    # data objects: every bound or referenced address inside a unit's range of a data section, but for those inside an
+    # object of a known size (config.json "object_sizes", by its bound name: a source unit's array that other units
+    # read at offsets into it), whose references are then the object's symbol and an offset
     targets = set(bound) | set(sources)
+    for name, size in image.config.get("object_sizes", {}).items():
+        start = image.bindings[name]
+        targets -= {a for a in targets if start < a < start + int(size, 16)}
     for unit, unit_ranges in ranges.items():
         for section, start, end, options in unit_ranges:
             if section == ".text" or section in RUNTIME_SECTIONS:
@@ -588,6 +694,32 @@ def format_splits(sections, order, ranges):
     return "\n".join(lines)
 
 
+def data_units(image, order, ranges):
+    """The units of data only that config/VERSION/config.json's "data_units" lists ({"unit": source, "before": unit,
+    "ranges": [[section, start, end], ...]}): their ranges cut out of the units that the references gave them to (a unit
+    with no code is not one the functions can order: MSL's locale.c and float.c, whose objects only other units'
+    code uses), and the unit put before BEFORE. A unit the functions have already (no "before") gets the ranges too:
+    data that no code refers to, such as the strings of a function the link dropped (MSL's misc_io.c)."""
+    for entry in image.config.get("data_units", []):
+        unit = entry["unit"]
+        if unit not in order:
+            order.insert(order.index(entry["before"]), unit)
+            ranges[unit] = []
+        for section, start, end in entry["ranges"]:
+            start, end = int(start, 16), int(end, 16)
+            for other in order:
+                for k, (name, low, high, options) in enumerate(ranges.get(other, [])):
+                    if name == section and low <= start and end <= high and other != unit:
+                        ranges[other][k:k + 1] = [(name, a, b, options) for a, b in ((low, start), (end, high)) if a < b]
+                        break
+                else:
+                    continue
+                break
+            else:
+                raise SystemExit(f"data_units: no unit has {section} {start:#x}-{end:#x}")
+            ranges[unit].append((section, start, end, {}))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("version")
@@ -597,11 +729,14 @@ def main():
     args = parser.parse_args()
     image, order, ranges, owners, refs, everywhere, ref_units, ref_sections = derive(
         args.version, args.reference, args.exe, args.out)
+    # (the functions' and references' unit indices are into the order before the data units go in)
+    code_order = list(order)
+    data_units(image, order, ranges)
     out = Path(args.out or f"config/{folder(args.version)}")
     out.mkdir(parents=True, exist_ok=True)
     (out / "splits.txt").write_text(format_splits(ref_sections, order, ranges))
     ref_symbols = read_symbols(f"config/{folder(args.reference)}/symbols.txt")
-    lines = make_symbols(image, order, ranges, owners, refs, ref_symbols)
+    lines = make_symbols(image, code_order, ranges, owners, refs, ref_symbols)
     (out / "symbols.txt").write_text("\n".join(lines) + "\n")
 
 

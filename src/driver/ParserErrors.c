@@ -12,6 +12,54 @@
 
 static char formatted_message[1024];
 
+#if defined(LINKER) && VERSION >= VERSION_GC_2_7
+#include <string.h>
+
+/* The output's name for the 2.x linker's parser glue: NAME (DEFAULT_NAME when empty), with the extension of the pairs
+   (ID, EXTENSION) after DEFAULT_NAME, ending in -1, whose ID is KEY when ADD_EXTENSION and the name has no dot; cut to
+   MAX_LENGTH - 1 characters, a Pascal string when TO_PASCAL. */
+int fn_0040d952(char *name, char *output, unsigned int maxLength, Boolean toPascal, Boolean addExtension, int key,
+                char *defaultName, ...)
+{
+    char buffer[256];
+    char *pairs;
+    int id;
+    char *extension;
+    Boolean hasDot;
+
+    va_start(pairs, defaultName);
+    if (name == NULL || name[0] == 0) {
+        strcpy(buffer, defaultName ? defaultName : "a.out");
+    } else {
+        strcpy(buffer, name);
+    }
+    hasDot = strchr(buffer, '.') != NULL;
+    while ((pairs += 4, id = ((int *)pairs)[-1]) != -1 && (pairs += 4, extension = ((char **)pairs)[-1]) != NULL) {
+        if (key != id) {
+            continue;
+        }
+        if (!hasDot && addExtension) {
+            if (strlen(extension) + strlen(buffer) >= maxLength) {
+                strcpy(buffer + maxLength - strlen(extension) - 1, extension);
+            } else {
+                strcat(buffer, extension);
+            }
+        }
+        break;
+    }
+    if (strlen(buffer) >= maxLength) {
+        Targets_ReportMessage(0x41, buffer, maxLength - 1);
+        buffer[maxLength - 1] = 0;
+    }
+    strcpy(output, buffer);
+    if (toPascal) {
+        CLIO_ConvertToPascalString(output);
+    }
+    return 1;
+}
+#endif
+
+
 void Targets_FormatAndDispatchMessage(char *message, char *arguments)
 {
     vsprintf(formatted_message, message, (char *)(unsigned int *)arguments);
