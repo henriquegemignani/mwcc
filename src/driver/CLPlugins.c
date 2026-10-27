@@ -321,7 +321,11 @@ char *format_plugin_version(Plugin *plugin)
     UInt16 *version;
     char *result;
     char *cursor;
+#ifdef NONMATCHING
+    char text[32]; /* (the original's 16 overflows: "3.0.2 build NNNNN" and its NUL take 18) */
+#else
     char text[16];
+#endif
 
     if (plugin == NULL && data_005d89be.valid != 0) {
         version = data_005d89be.numbers;

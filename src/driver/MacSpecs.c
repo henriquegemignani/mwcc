@@ -515,7 +515,8 @@ int __stdcall MacSpecs_MakeOSSpec(CWFileSpec *record, OSSpec *spec)
         return result;
     }
     p2cstrcpy(file_name_buffer, record->name);
-#if VERSION >= VERSION_GC_1_3
+/* (the 2.7 linker no longer recovers the name's case) */
+#if VERSION >= VERSION_GC_1_3 && !(defined(LINKER) && LINKER >= 27)
     result = OS_MakeNameSpec(file_name_buffer, &spec->name);
     if (result != 0) {
         return result;
