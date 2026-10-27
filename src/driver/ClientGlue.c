@@ -82,11 +82,20 @@ int __stdcall ClientGlue_AddResourceStrings(char *arg1, SInt16 arg2, char **arg3
     return ResourceStrings_AddResource(arg1, arg2, arg3);
 }
 
+/* (its result is the AddPlugin's, left in EAX, which CLMain.c's fn_0040a7c0 returns: wasm returns it) */
+#ifdef NONMATCHING
+int __stdcall ClientGlue_AddPlugin(PluginRequiredInputRecord *a0)
+#else
 void __stdcall ClientGlue_AddPlugin(PluginRequiredInputRecord *a0)
+#endif
 {
     Plugin *lift_call_0;
     lift_call_0 = CLPlugins_CreatePluginDataCopy(a0, 0U, 0U);
+#ifdef NONMATCHING
+    return CLPlugins_AddPlugin(lift_call_0);
+#else
     CLPlugins_AddPlugin(lift_call_0);
+#endif
 }
 
 int __stdcall ClientGlue_CreateAndAddPlugin(void *a0, void *a1)
@@ -98,13 +107,22 @@ int __stdcall ClientGlue_CreateAndAddPlugin(void *a0, void *a1)
     return lift_call_1;
 }
 
+/* (its result is the AddPlugin's, left in EAX: wasm returns it) */
+#ifdef NONMATCHING
+int __stdcall fn_00405280(PluginRequiredInputRecord *a0, PluginQueryTable *a1)
+#else
 void __stdcall fn_00405280(PluginRequiredInputRecord *a0, PluginQueryTable *a1)
+#endif
 {
     Plugin *lift_call_0;
     int lift_call_1;
     lift_call_0 = CLPlugins_CreatePluginDataCopy(a0, 0U, a1);
     lift_call_1 = CLPlugins_AddPlugin(lift_call_0);
+#ifdef NONMATCHING
+    return lift_call_1;
+#else
     return;
+#endif
 }
 
 #pragma auto_inline off

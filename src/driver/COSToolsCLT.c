@@ -156,8 +156,15 @@ int COS_FileNew(CWFileSpec *record, short *output, unsigned int argument4, unsig
     Files_DeleteFileFromPath(record->vRefNum, record->parID, record->name);
     result = Files_CallWithFileSpecFromPath(record->vRefNum, record->parID, record->name, argument4, argument5);
     if ((short)result == 0) {
+#ifdef NONMATCHING /* (x86 returns the EAX left: the open's result, or the creation's; the caller tests it) */
+        return Files_OpenFileByPath(record->vRefNum, record->parID, record->name, 3, output);
+#else
         Files_OpenFileByPath(record->vRefNum, record->parID, record->name, 3, output);
+#endif
     }
+#ifdef NONMATCHING
+    return result;
+#endif
 }
 
 short COS_FileOpen(CWFileSpec *fileSpec, short *fileRef)

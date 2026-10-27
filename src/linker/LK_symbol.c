@@ -9,8 +9,10 @@
 #include "driver/Files.h"
 #include "linker/ELF_linker.h"
 
+#ifndef NONMATCHING /* (the wasm build has the target's stdarg.h) */
 typedef char *va_list;
 #define va_start(ap, last) ((ap) = (char *)&(last) + (((char *)(&(last) + 1) - (char *)&(last) + 3) / 4 * 4))
+#endif
 
 extern void CompilerTools_FormatMessageAndLongjmp(int message, int status, ...);
 extern int strcmp(const char *a, const char *b);

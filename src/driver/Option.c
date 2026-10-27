@@ -585,7 +585,7 @@ int parse_option(Option *option, int flags)
 
 static inline int lowercase(char character)
 {
-    return ((int (*)(char))to_lowercase)(character);
+    return TO_LOWERCASE_CHAR(character);
 }
 
 int match_option_names(char *names, char *arg, int flags, int *result)
@@ -1133,12 +1133,17 @@ unsigned int forward_varargs(unsigned int messageId, ...)
     int offset;
     va_list args;
 
+/* (wasm: the variadic arguments are not after the named ones) */
+#ifdef NONMATCHING
+    va_start(args, messageId);
+#else
     base = (int)&messageId;
     offset = (int)((char *)&messageId + sizeof(short)) - base;
     offset = (offset + 3) / 4 * 4;
     base = (int)&messageId;
     offset += base;
     args = (char *)offset;
+#endif
     format_and_dispatch_option_message(messageId, args);
 }
 
@@ -1148,11 +1153,15 @@ unsigned int Option_ForwardVarArgs(unsigned int messageId, ...)
     char *end = (char *)&messageId;
     int size;
     va_list arguments;
+#ifdef NONMATCHING
+    va_start(arguments, messageId);
+#else
     end += sizeof(short);
     size = end - start;
     size = (size + 3) / 4 * 4;
     size += (unsigned int)&messageId;
     arguments = (char *)size;
+#endif
     report_option_message(messageId, arguments);
 }
 
@@ -1213,9 +1222,17 @@ int show_option_help(char *name)
 
 unsigned char Option_ShowHelp(void)
 {
+/* (x86 returns the EAX the help leaves, which the caller and-s into tool_checks_passed) */
+#ifdef NONMATCHING
+    if (data_00587ce0 & 1U) {
+        return show_option_help(data_00587ca0);
+    }
+    return print_option_help(data_00587ca0);
+#else
     if (data_00587ce0 & 1U) {
         show_option_help(data_00587ca0);
         return;
     }
     print_option_help(data_00587ca0);
+#endif
 }

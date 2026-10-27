@@ -36,7 +36,11 @@ SInt32 limited_diagnostic_count;
 char data_00587958;
 SInt32 data_00588228;
 
+#ifdef NONMATCHING /* (the target's walk of the variadic arguments: AP is a va_list from va_start) */
+#define VA_ARG(ap, T) __builtin_va_arg(*(va_list *)&(ap), T)
+#else
 #define VA_ARG(ap, T) (*(T *)((ap += 4) - 4))
+#endif
 
 SInt16 limited_diagnostic_limit = 100;
 SInt16 data_005511b4 = 2000;
@@ -119,7 +123,11 @@ void format_message(char *buf, int size, char *fmt, ...)
 {
     char *args;
 
+#ifdef NONMATCHING
+    format_string(buf, size, fmt, (char *)__va_start(fmt));
+#else
     format_string(buf, size, fmt, ((char *)(&fmt + 1) - (args = (char *)&fmt) + 3) / 4 * 4 + args);
+#endif
 }
 
 /* The error of an undefined symbol NAME, referred to by REFERRER in FILE (two lines: 0xf, 0x10), counted with the
@@ -170,8 +178,12 @@ void CompilerTools_ReportMessage(SInt32 diagnosticCode, ...)
     char *args;
 
     COS_GetString(format, 0x2af9, diagnosticCode);
+#ifdef NONMATCHING
+    format_string(message, sizeof(message), format, (char *)__va_start(diagnosticCode));
+#else
     format_string(message, sizeof(message), format,
                   (((char *)(&diagnosticCode + 1) - (args = (char *)&diagnosticCode)) + 3) / 4 * 4 + args);
+#endif
     fn_00420270(message, "");
 }
 #endif
@@ -187,7 +199,9 @@ unsigned char CompilerTools_ReportDiagnostic(SInt32 diagnosticCode, ...)
 
     if (data_00587958 == 0 && data_00588228 < data_005511b4) {
         COS_GetString(format, 0x2af9, diagnosticCode);
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+        va_start(args, diagnosticCode);
+#elif VERSION >= VERSION_GC_1_3
         base = (char *)&diagnosticCode;
         args = base + ((va_list)(&diagnosticCode + 1) - base + 3) / 4 * 4;
 #else
@@ -207,7 +221,9 @@ void CompilerTools_ReportLimitedDiagnostic(SInt32 diagnosticCode, ...)
 
     if (limited_diagnostic_count < limited_diagnostic_limit) {
         COS_GetString(format, 0x2af9, diagnosticCode);
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+        format_string(message, sizeof(message), format, (char *)__va_start(diagnosticCode));
+#elif VERSION >= VERSION_GC_1_3
         format_string(message, sizeof(message), format,
                       (((char *)(&diagnosticCode + 1) - (args = (char *)&diagnosticCode)) + 3) / 4 * 4 + args);
 #else
@@ -218,7 +234,9 @@ void CompilerTools_ReportLimitedDiagnostic(SInt32 diagnosticCode, ...)
         limited_diagnostic_count++;
     } else if (limited_diagnostic_count == limited_diagnostic_limit) {
         COS_GetString(format, 0x2af9, 25);
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+        format_string(message, sizeof(message), format, (char *)__va_start(diagnosticCode));
+#elif VERSION >= VERSION_GC_1_3
         format_string(message, sizeof(message), format,
                       (((char *)(&diagnosticCode + 1) - (args = (char *)&diagnosticCode)) + 3) / 4 * 4 + args);
 #else
@@ -240,8 +258,12 @@ void CompilerTools_BufferDiagnostic(SInt32 diagnosticCode, ...)
 
     if (limited_diagnostic_count < limited_diagnostic_limit) {
         COS_GetString(format, 0x2af9, diagnosticCode);
+#ifdef NONMATCHING
+        format_string(message_buffer, 0x800, format, (char *)__va_start(diagnosticCode));
+#else
         format_string(message_buffer, 0x800, format,
                       (((char *)(&diagnosticCode + 1) - (args = (char *)&diagnosticCode)) + 3) / 4 * 4 + args);
+#endif
     }
 }
 
@@ -254,13 +276,21 @@ void CompilerTools_ReportBufferedDiagnostic(SInt32 diagnosticCode, ...)
 
     if (limited_diagnostic_count < limited_diagnostic_limit) {
         COS_GetString(format, 0x2af9, diagnosticCode);
+#ifdef NONMATCHING
+        format_string(message, sizeof(message), format, (char *)__va_start(diagnosticCode));
+#else
         format_string(message, sizeof(message), format,
                       (((char *)(&diagnosticCode + 1) - (args = (char *)&diagnosticCode)) + 3) / 4 * 4 + args);
+#endif
         PRINT_LIMITED(message_buffer, message);
     } else if (limited_diagnostic_count == limited_diagnostic_limit) {
         COS_GetString(format, 0x2af9, 25);
+#ifdef NONMATCHING
+        format_string(message, sizeof(message), format, (char *)__va_start(diagnosticCode));
+#else
         format_string(message, sizeof(message), format,
                       (((char *)(&diagnosticCode + 1) - (args = (char *)&diagnosticCode)) + 3) / 4 * 4 + args);
+#endif
         PRINT_LIMITED(message, NULL);
     } else {
         return;
@@ -269,13 +299,20 @@ void CompilerTools_ReportBufferedDiagnostic(SInt32 diagnosticCode, ...)
 }
 #endif
 
+/* (called with arguments for the message: wasm's call of a variadic function has one more parameter) */
+#ifdef NONMATCHING
+void CompilerTools_FormatMessageAndLongjmp(int message, int status, ...)
+#else
 void CompilerTools_FormatMessageAndLongjmp(int message, int status)
+#endif
 {
     va_list args;
     char buf[256];
 
     COS_GetString(buf, 0x2af9, message);
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+    format_string(message_buffer, 0x800, buf, (char *)__va_start(status));
+#elif VERSION >= VERSION_GC_1_3
     format_string(message_buffer, 0x800, buf, (((char *)(&status + 1) - (args = (char *)&status)) + 3) / 4 * 4 + args);
 #else
     args = (va_list)&status + (((va_list)(&status + 1) - (va_list)&status + 3) / 4) * 4;

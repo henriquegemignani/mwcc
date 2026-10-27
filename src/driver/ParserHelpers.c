@@ -29,7 +29,9 @@ char data_0058851b;
 
 short data_0054a0b8 = 0;
 
+#ifndef NONMATCHING /* (wasm: the variadic arguments are not after the named ones; the target's, from <stdarg.h>) */
 #define va_start(ap, parm) ap = (char *)&parm + ((((long)((char *)&parm + 2) - (long)&parm) + 3) / 4 * 4)
+#endif
 int get_spec_from_signature_callback(const char *path, OSSpec *spec)
 {
     DropinFileCallback l;
@@ -147,7 +149,7 @@ Boolean match_extension_pattern(char *pattern, char *name)
     while (*pattern) {
         if (*pattern == '|' && *p == 0)
             return 1;
-        if (((int (*)(char))to_lowercase)(*pattern) == ((int (*)(char))to_lowercase)(*p)) {
+        if (TO_LOWERCASE_CHAR(*pattern) == TO_LOWERCASE_CHAR(*p)) {
             pattern++;
             p++;
         } else {
@@ -397,7 +399,13 @@ int ParserHelpers_AddFileList(char *list, char separator, char alternateSeparato
             return 0;
         }
         if (!get_spec_from_signature_callback(component, &spec)) {
+#ifdef NONMATCHING
+            /* (the original asks OS_IsDir about the spec the failed lookup left, what its stack held, which is no
+               directory: a file not found, even a directory, is reported as not found) */
+            if (0)
+#else
             if (OS_IsDir(&spec))
+#endif
                 report_environment_variable_message(Targets_FormatAndDispatchMessage, mode == 1 ? name : NULL, 16,
                                                     component);
             else

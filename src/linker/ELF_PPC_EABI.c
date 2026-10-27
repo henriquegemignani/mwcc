@@ -104,6 +104,18 @@ extern void ELF_gen_WriteSymbols(void);                        /* 0x43d380 */
 extern void ELF_gen_WriteComment(ELOutput *out);               /* 0x43b2b0 */
 extern void ELF_gen_WriteRecords(ELOutput *out);               /* 0x43b530 */
 extern void ELF_gen_WriteSegInfo(void);                        /* 0x43cf20 */
+/* The write callbacks of .shstrtab, .strtab, .symtab and the segment information take no argument, and are called
+ * with the section (the o54 callbacks' argument). WebAssembly traps on that call: there each one is called through
+ * a function that takes the section. */
+#ifdef NONMATCHING
+static void write_section_names(ELOutput *unused) { ELF_gen_WriteSectionNames(); }
+static void write_strings(ELOutput *unused) { ELF_gen_WriteStrings(); }
+static void write_symbols(ELOutput *unused) { ELF_gen_WriteSymbols(); }
+static void write_seg_info(ELOutput *unused) { ELF_gen_WriteSegInfo(); }
+#define WRITE_CALLBACK(function, thunk) (unsigned long)thunk
+#else
+#define WRITE_CALLBACK(function, thunk) (unsigned long)function
+#endif
 extern void ELF_gen_WriteRelocations(ELOutput *out);           /* 0x43c7c0 */
 extern void ELF_gen_WriteRecordRelocations(ELOutput *out);     /* 0x43bcb0 */
 extern ELOutput **data_004a2a88;        /* the output sections, null-terminated (in layout order) */
@@ -3214,11 +3226,11 @@ void ELF_PPC_EABI_PrepareWrite(void) {
         node->output->o54 = (unsigned long)ELF_gen_WriteDebug;
         data_004a2820[count++] = node->output;
     }
-    data_004a2df6->o54 = (unsigned long)ELF_gen_WriteSectionNames;
+    data_004a2df6->o54 = WRITE_CALLBACK(ELF_gen_WriteSectionNames, write_section_names);
     data_004a2820[count] = data_004a2df6;
-    data_004a2df2->o54 = (unsigned long)ELF_gen_WriteStrings;
+    data_004a2df2->o54 = WRITE_CALLBACK(ELF_gen_WriteStrings, write_strings);
     data_004a2820[count + 1] = data_004a2df2;
-    data_004a2dee->o54 = (unsigned long)ELF_gen_WriteSymbols;
+    data_004a2dee->o54 = WRITE_CALLBACK(ELF_gen_WriteSymbols, write_symbols);
     data_004a2820[count + 2] = data_004a2dee;
     count += 3;
 #if LINKER < 27
@@ -3239,7 +3251,7 @@ void ELF_PPC_EABI_PrepareWrite(void) {
 #endif
 #if LINKER < 27
     if (data_004a2e45) {
-        data_004a2dfa->o54 = (unsigned long)ELF_gen_WriteSegInfo;
+        data_004a2dfa->o54 = WRITE_CALLBACK(ELF_gen_WriteSegInfo, write_seg_info);
         data_004a2820[count++] = data_004a2dfa;
     }
 #endif
@@ -3290,7 +3302,7 @@ void ELF_PPC_EABI_PrepareWrite(void) {
 #if LINKER >= 27
     /* (2.7: last) */
     if (data_004a2e45) {
-        data_004a2dfa->o54 = (unsigned long)ELF_gen_WriteSegInfo;
+        data_004a2dfa->o54 = WRITE_CALLBACK(ELF_gen_WriteSegInfo, write_seg_info);
         data_004a2820[count++] = data_004a2dfa;
     }
 #endif

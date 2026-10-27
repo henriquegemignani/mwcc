@@ -103,9 +103,18 @@ void clear_global(void)
     return;
 }
 
+#ifdef NONMATCHING
+/* (a signal handler takes the signal: a call through another type traps in wasm) */
+static void wasm_clear_global(int signal) { clear_global(); }
+#endif
+
 void CLIO_ExchangeClearGlobal(void)
 {
+#ifdef NONMATCHING
+    signal(SIGABRT, wasm_clear_global);
+#else
     signal(SIGABRT, (__signal_func_ptr)clear_global);
+#endif
 }
 
 char CLIO_InitializeStreamBuffering(void)
@@ -425,8 +434,12 @@ char *format_prefixed_text(char *output, int remaining, char *prefix, char *form
 
     while (*format != '\0' && state.capacity > 0) {
         if (*format == '%') {
+#ifdef NONMATCHING /* (the target's walk of the variadic arguments: ARGS is a va_list from va_start) */
+            text = __builtin_va_arg(*(va_list *)&args, char *);
+#else
             args++;
             text = *(char **)((char *)args - 4);
+#endif
             while (*text != '\0' && state.capacity > 0) {
                 if (*text == '\r' || *text == '\n') {
                     append_prefix_separator(&state);
@@ -467,7 +480,11 @@ char *format_prefixed_text(char *output, int remaining, char *prefix, char *form
 
 char *forward_format_arguments(char *output, int size, char *prefix, char *format, ...)
 {
-#if VERSION >= VERSION_GC_1_3
+/* (wasm: the variadic arguments are not after the named ones; format_prefixed_text walks them, all pointers, by
+   4 bytes, which is also their layout in wasm's variadic area) */
+#ifdef NONMATCHING
+    char **arguments = (char **)__va_start(format);
+#elif VERSION >= VERSION_GC_1_3
     char *base = (char *)&format;
     char **arguments = (char **)(base + (((char *)(&format + 1) - base + 3) / 4 * 4));
 #else
@@ -910,7 +927,9 @@ void emit_formatted_message(short kind, char *format, ...)
 {
     char buffer[256];
     char *message;
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+    message = mvprintf(buffer, sizeof(buffer), format, __va_start(format));
+#elif VERSION >= VERSION_GC_1_3
     char *base;
 
     message = mvprintf(buffer, sizeof(buffer), format, (((char *)(&format + 1) - (base = (char *)&format)) + 3) / 4 * 4 + base);
@@ -936,7 +955,9 @@ void CLIO_FormatAndDispatchText(char *fmt, ...)
     char *base;
 #endif
 
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+    va_start(args, fmt);
+#elif VERSION >= VERSION_GC_1_3
     base = (char *)&fmt;
     args = base + (((va_list)(&fmt + 1) - base + 3) / 4 * 4);
 #else
@@ -957,7 +978,9 @@ void CLIO_WriteFormattedText(const char *format, ...)
 #endif
     char *text;
 
-#if VERSION >= VERSION_GC_1_3
+#ifdef NONMATCHING
+    va_start(args, format);
+#elif VERSION >= VERSION_GC_1_3
     base = (char *)&format;
     args = base + (((va_list)(&format + 1) - base) + 3) / 4 * 4;
 #else
@@ -1036,7 +1059,11 @@ short CLIO_ReportDiagnostic(Plugin *type, DiagnosticSourcePosition *record, int 
         diagnostic.record = *record;
         extract_diagnostic_source_line(&diagnostic.record);
     }
+#ifdef NONMATCHING
+    args = (char **)__va_start(argument);
+#else
     args = &argument + (((char *)(&argument + 1) - (char *)&argument + 3) / 4);
+#endif
     {
         if ((language = optsCmdLine.msgStyle) == 2) {
             print_diagnostic(type, record != NULL ? &diagnostic.dump : NULL, message, severity, argument, args);

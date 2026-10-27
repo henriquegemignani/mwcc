@@ -12,6 +12,9 @@
 #include "driver/Utils.h"
 #include <stdio.h>
 #include <string.h>
+#ifdef NONMATCHING
+#include <stdlib.h> /* (exit: implicitly int, and a call through another type traps in wasm) */
+#endif
 
 struct HelpColumn helpTextColumn;
 struct HelpColumn firstHelpColumn;
@@ -29,7 +32,11 @@ void append_formatted_text(HelpColumn *buf, char *format, ...)
     char text[1024];
     char *cursor;
     char ch;
+#ifdef NONMATCHING /* (the variadic arguments are not after the named ones) */
+    vsprintf(text, format, __va_start(format));
+#else
     vsprintf(text, format, (va_list)&format + (((va_list)(&format + 1) - (va_list)&format + 3) / 4) * 4);
+#endif
 
     cursor = text;
     while (*cursor != 0) {

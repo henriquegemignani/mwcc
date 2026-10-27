@@ -169,7 +169,11 @@ extern void CompilerTools_ReportLimitedDiagnostic(int message, ...);
 extern LCFSection *ELF_PPC_EABI_NewOutput(char *name, int type, int kind);
 extern unsigned long ELF_PPC_EABI_LinkSymbolValue(long section);
 extern LCFSymbol *LK_symbol_Find(char *name, long index);
+#ifdef NONMATCHING /* (LinkSym.c's returns the symbol: a call through another type traps in wasm) */
+extern void *LinkSym_Add(char *name, LCFExpr *expr, LCFSection *section, int flag);
+#else
 extern void LinkSym_Add(char *name, LCFExpr *expr, LCFSection *section, int flag);
+#endif
 
 extern LCFFile *data_004a28e4;
 extern LCFSectionRef *data_004a2de6;
@@ -461,6 +465,11 @@ char *GetToken(char *p, Boolean inList, char **out) {
     start = p;
     length = 0;
     for (;;) {
+#ifdef NONMATCHING
+        /* (the original reads on past the command file's end, through the heap, to a space: wasm stops there) */
+        if (*p == 0)
+            break;
+#endif
         if (quoted) {
             if (*p == '"') {
                 p++;

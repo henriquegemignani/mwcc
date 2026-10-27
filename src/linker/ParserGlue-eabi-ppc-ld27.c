@@ -528,6 +528,32 @@ extern Option optlstCPlusPlus_007;
 extern Option *optlstCPlusPlus_008[];
 extern OptionList optlstCPlusPlus;
 
+#ifdef NONMATCHING
+/* (wasm: the GENERIC_T parse functions are called with 4 arguments, and a call through another type traps: those
+   that take fewer are called through these, which pass them the first ones, as x86 did) */
+#define WASM_GENERIC(fn) static int wasm_##fn(const char *opt, void *var, const char *pstr, int flags)
+WASM_GENERIC(fn_0040cff6) { return fn_0040cff6(); }
+WASM_GENERIC(fn_0040d002) { return fn_0040d002(); }
+WASM_GENERIC(fn_0040d0eb) { return fn_0040d0eb(); }
+WASM_GENERIC(print_command_line_warning_options) { return print_command_line_warning_options(); }
+WASM_GENERIC(fn_0040c9e7) { return fn_0040c9e7((char *)opt, (int)var, (char *)pstr); }
+WASM_GENERIC(fn_0040cd55) { return fn_0040cd55((char *)opt, (char *)var, (char *)pstr); }
+WASM_GENERIC(set_output_path) { return set_output_path((char *)opt, (int)var, (char *)pstr); }
+WASM_GENERIC(ParserHelpers_AddUnixLibraryFile)
+{
+    return ParserHelpers_AddUnixLibraryFile((char *)opt, (char *)var, (char *)pstr);
+}
+#undef WASM_GENERIC
+#define fn_0040cff6 wasm_fn_0040cff6
+#define fn_0040d002 wasm_fn_0040d002
+#define fn_0040d0eb wasm_fn_0040d0eb
+#define print_command_line_warning_options wasm_print_command_line_warning_options
+#define fn_0040c9e7 wasm_fn_0040c9e7
+#define fn_0040cd55 wasm_fn_0040cd55
+#define set_output_path wasm_set_output_path
+#define ParserHelpers_AddUnixLibraryFile wasm_ParserHelpers_AddUnixLibraryFile
+#endif
+
 MASK_T optlstCmdLine_000 = {9, 0x01, 0, 0, 4, 0x4000, 0x0, (void *)&data_00587ce0};
 Option optlstCmdLine_001 = {"usage", 0x2041, (PARAM_T *)&optlstCmdLine_000, 0, 0, "show usage information"};
 MASK_T optlstCmdLine_002 = {9, 0x01, 0, 0, 4, 0x100, 0x0, (void *)&data_00587ce0};
@@ -1286,7 +1312,7 @@ static Boolean pre_parse(void)
     char *name;
 
     if (cmdline_environment->argc > 1) {
-        options = ParserHelpers_GetFirstEnvironmentVariable("MWLinkEABIPPCOptions\0MWLinkOptions", 0, &name);
+        options = ParserHelpers_GetFirstEnvironmentVariable("MWLinkEABIPPCOptions\0MWLinkOptions" ENVIRONMENT_LIST_END, 0, &name);
         if (options != NULL)
             ParserHelpers_AddEnvironmentOptions(options);
     }
@@ -1302,7 +1328,7 @@ static Boolean mid_parse(void)
     char *name;
 
     if (data_00587e10 > 0 && useDefaultLibraries) {
-        paths = ParserHelpers_GetFirstEnvironmentVariable("MWEABIPPCLibraries\0MWLibraries", 1, &name);
+        paths = ParserHelpers_GetFirstEnvironmentVariable("MWEABIPPCLibraries\0MWLibraries" ENVIRONMENT_LIST_END, 1, &name);
         if (paths != NULL && ParserHelpers_ParsePathList(paths, ';', ':', 1, name, 1, -1, 0) == 0) {
             return 0;
         }
@@ -1328,7 +1354,7 @@ static Boolean post_parse(void)
         return 0;
     }
     if (pCmdLine.state == 3 && pProject.type != PROJECT_LIBRARY && useDefaultLibraries) {
-        files = ParserHelpers_GetFirstEnvironmentVariable("MWEABIPPCLibraryFiles\0MWLibraryFiles", 1, &name);
+        files = ParserHelpers_GetFirstEnvironmentVariable("MWEABIPPCLibraryFiles\0MWLibraryFiles" ENVIRONMENT_LIST_END, 1, &name);
         if (files != NULL && ParserHelpers_AddFileList(files, ';', ':', 1, name, -1) == 0) {
             return 0;
         }

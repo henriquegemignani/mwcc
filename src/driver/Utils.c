@@ -353,7 +353,7 @@ int Utils_MatchStringSegments(char *segment, char *candidate, int caseSensitive,
         }
     } else {
         while (segment < segmentEnd && candidate < candidateEnd) {
-            if (((int (*)(char))to_lowercase)(*segment) != ((int (*)(char))to_lowercase)(*candidate))
+            if (TO_LOWERCASE_CHAR(*segment) != TO_LOWERCASE_CHAR(*candidate))
                 break;
             segment++;
             candidate++;
