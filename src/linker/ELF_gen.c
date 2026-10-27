@@ -229,6 +229,113 @@ void ELF_gen_WriteDebug(ELOutput *out);
 void ELF_gen_WriteRecords(ELOutput *out);
 void ELF_gen_WriteComment(ELOutput *out);
 
+#if LINKER >= 27
+/* What 2.7 writes straight to a file goes through a buffer (0x4435e0 for the output, 0x44f340 for the S-records,
+   0x464750 for the map), written out when it is full, before a seek and at the close. Its size is the -linkmode's
+   (0x443220): 0x200 bytes for lessram, 0x1000 for normal and 0x100000 for moreram; the map's is 0x1000. */
+typedef struct ELGWBuffer {
+    short file;
+    char *data;
+    unsigned long capacity;
+    unsigned long used;
+} ELGWBuffer;
+
+static ELGWBuffer ELGW_buffers[4];
+unsigned long ELF_gen_writeBufferSize = 0x1000;
+
+static void ELGC_WriteError(short error, int message);
+
+/* Forgets the buffers of the last link (their memory went with its heap). */
+void ELF_gen_ResetWriteBuffers(void) {
+    memset(ELGW_buffers, 0, sizeof(ELGW_buffers));
+}
+
+/* FILE's buffer, made at its first write. */
+static ELGWBuffer *ELGW_Find(short file, Boolean create) {
+    ELGWBuffer *unused = NULL;
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        if (ELGW_buffers[i].data && ELGW_buffers[i].file == file)
+            return &ELGW_buffers[i];
+        if (!ELGW_buffers[i].data && !unused)
+            unused = &ELGW_buffers[i];
+    }
+    if (!create || !unused || !file)
+        return NULL;
+    unused->file = file;
+    unused->capacity = file == data_004a2dce ? 0x1000 : ELF_gen_writeBufferSize;
+    unused->data = galloc(unused->capacity);
+    unused->used = 0;
+    return unused;
+}
+
+static SInt16 ELGW_Flush(ELGWBuffer *buffer) {
+    SInt16 error = 0;
+
+    if (buffer && buffer->used) {
+        error = COS_FileWrite(buffer->file, buffer->data, buffer->used);
+        buffer->used = 0;
+    }
+    return error;
+}
+
+static SInt16 ELGW_Write(SInt16 file, void *data, SInt32 size) {
+    ELGWBuffer *buffer = ELGW_Find(file, 1);
+    SInt16 error;
+
+    if (!buffer)
+        return COS_FileWrite(file, data, size);
+    if ((unsigned long)size < buffer->capacity - buffer->used) {
+        memcpy(buffer->data + buffer->used, data, size);
+        buffer->used += size;
+        return 0;
+    }
+    error = ELGW_Flush(buffer);
+    if (error)
+        return error;
+    if ((unsigned long)size > buffer->capacity)
+        return COS_FileWrite(file, data, size);
+    memcpy(buffer->data, data, size);
+    buffer->used = size;
+    return 0;
+}
+
+/* The position the next write goes to: the file's, past what is buffered. */
+static short ELGW_GetPos(short file, long *position) {
+    ELGWBuffer *buffer = ELGW_Find(file, 0);
+    short error = COS_FileGetPos(file, position);
+
+    if (!error && buffer)
+        *position += buffer->used;
+    return error;
+}
+
+static SInt16 ELGW_SetPos(SInt16 file, SInt32 position) {
+    SInt16 error = ELGW_Flush(ELGW_Find(file, 0));
+
+    if (error)
+        return error;
+    return COS_FileSetPos(file, position);
+}
+
+/* FILE's buffer written out, then the file closed (MESSAGE: 1 for the output and S-records, 5 for the map). */
+void ELF_gen_CloseFile(short file, int message) {
+    ELGWBuffer *buffer = ELGW_Find(file, 0);
+    SInt16 error = ELGW_Flush(buffer);
+
+    if (buffer)
+        buffer->data = NULL;
+    Files_Close(file);
+    if (error)
+        ELGC_WriteError(error, message);
+}
+
+#define COS_FileWrite ELGW_Write
+#define COS_FileGetPos ELGW_GetPos
+#define COS_FileSetPos ELGW_SetPos
+#endif
+
 /* A write to the output failed. */
 static void ELGA_Fail(short error) {
     CompilerTools_ReportLimitedDiagnostic(1, data_0049bed6);
@@ -499,7 +606,11 @@ void ELF_gen_CloseOutput(void) {
     ELOutput *section;
 
     if (data_004a2dcc) {
+#if LINKER >= 27
+        ELF_gen_CloseFile(data_004a2dcc, 1);
+#else
         Files_Close(data_004a2dcc);
+#endif
         fn_00412de0(0, data_0049bed0.vRefNum);
         data_004a2dcc = 0;
     }

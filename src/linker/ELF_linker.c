@@ -2754,6 +2754,9 @@ int ELF_linker_Link(void) {
             CompilerTools_FormatMessageAndLongjmp(0xd, 2);
         }
         data_004a2dce = 0;
+#if LINKER >= 27
+        ELF_gen_ResetWriteBuffers();
+#endif
         if (data_0049c116)
             LK_symbol_OpenMap();
         data_004a2e34 = 0;

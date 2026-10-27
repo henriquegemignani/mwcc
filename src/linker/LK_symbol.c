@@ -143,7 +143,11 @@ void LK_symbol_OpenMap(void) {
 /* 0x451f70 */
 void LK_symbol_CloseMap(void) {
     if (data_004a2dce) {
+#if LINKER >= 27
+        ELF_gen_CloseFile(data_004a2dce, 5);
+#else
         Files_Close(data_004a2dce);
+#endif
         data_004a2dce = 0;
     }
     FreeGList(&map);

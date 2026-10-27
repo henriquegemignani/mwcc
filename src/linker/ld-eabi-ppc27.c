@@ -828,6 +828,8 @@ static int fn_0041f1c0(void)
         data_004a2e3a = 0;
     data_004897a0 = data_00499b34.sreclength - 2;
     data_004897a4 = data_00499b34.sreceol + 1;
+    /* (the size of the buffers of what is written: -linkmode lessram, normal, moreram) */
+    ELF_gen_writeBufferSize = data_00499b34.linkmode == 0 ? 0x200 : data_00499b34.linkmode == 2 ? 0x100000 : 0x1000;
     data_004a2e47 = data_00499b34.listunused;
     data_004a2e43 = data_00499ba8.x35;
     data_004a28d8 = data_00499ba8.stacksize * 0x400;

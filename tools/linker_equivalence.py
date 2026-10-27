@@ -329,6 +329,9 @@ SREC = {
     "srec-eol-bad": (DOLPHIN, ["-sreceol", "amiga"]),
     "srec-low": (LOW, ["-srec", "-sreclength", "40"]),
     "srec-middle": (MIDDLE, ["-srec", "-sreceol", "unix"]),
+    # (2.7: the size of its write buffers; 2.6 has no -linkmode)
+    "linkmode-lessram": (DOLPHIN, ["-linkmode", "lessram", "-srec"]),
+    "linkmode-moreram": (DOLPHIN, ["-linkmode", "moreram", "-srec"]),
 }
 SCENARIOS.update({name: lcf for name, (lcf, _) in SREC.items()})
 

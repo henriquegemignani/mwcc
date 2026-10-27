@@ -442,6 +442,12 @@ extern ELPiece *data_004a2a68;          /* the entry point's symbol */
 extern short data_004a2dce;
 extern short data_004a2dcc;
 extern short data_004a2e34;
+#if LINKER >= 27
+/* ELF_gen.c's buffers of what is written to the output, the map and the S-records */
+extern unsigned long ELF_gen_writeBufferSize;
+extern void ELF_gen_ResetWriteBuffers(void);
+extern void ELF_gen_CloseFile(short file, int message);
+#endif
 extern long data_00588228;              /* 0x4a2a64 */
 extern long data_004a2a74;
 extern long data_004a2868;

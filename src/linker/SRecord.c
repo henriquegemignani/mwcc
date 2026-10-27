@@ -9,6 +9,9 @@ extern int sprintf(char *s, const char *format, ...);
 extern short PrepDumpELF_CreateFile(short vRefNum, long parID, unsigned char *name, long creator, long type);
 extern void CompilerTools_ReportLimitedDiagnostic(int message, ...);
 extern void ELF_gen_AddToBuffer(GList *buffer, short file, char *data, long length, int message);
+#if LINKER >= 27
+extern void ELF_gen_CloseFile(short file, int message);
+#endif
 
 /* The output file and the buffers its records are gathered in, when the output is not written as it is made. */
 extern char data_0049c120;
@@ -55,7 +58,11 @@ short SRecord_InitBuffer(GList *buffer, long size) {
 /* 0x00442e40 */
 void SRecord_CloseFile(void) {
     if (data_004a2e34) {
+#if LINKER >= 27
+        ELF_gen_CloseFile(data_004a2e34, 1);
+#else
         Files_Close(data_004a2e34);
+#endif
         data_004a2e34 = 0;
     }
     FreeGList(&data_004a21d0);
